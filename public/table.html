@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>King's Gambit</title>
+  <link rel="stylesheet" href="/css/table.css">
+  <link rel="stylesheet" href="/css/effects.css">
+</head>
+<body class="room">
+  <header class="topbar">
+    <a class="brand" href="/">♛ KING'S GAMBIT</a>
+    <span class="round-info" id="roundInfo"></span>
+  </header>
+
+  <main class="stage">
+    <div class="table" id="table">
+      <div class="rim"><div class="felt"></div></div>
+      <div class="center" id="center"></div>
+      <div id="seats"></div>
+    </div>
+  </main>
+
+  <aside class="feed-panel">
+    <div class="feed" id="feed"></div>
+    <form class="chat-form" id="chatForm" autocomplete="off">
+      <input id="chatInput" maxlength="200" placeholder="Send a message…">
+    </form>
+  </aside>
+
+  <section class="actions" id="actions"></section>
+
+  <div class="modal hidden" id="sitModal">
+    <form class="modal-card" id="sitForm">
+      <label for="nameInput">Your nickname</label>
+      <input id="nameInput" maxlength="16" placeholder="Your name" required>
+      <button class="btn btn-green" type="submit">Take the seat</button>
+      <button class="btn btn-ghost" type="button" id="sitCancel">Cancel</button>
+    </form>
+  </div>
+
+  <div class="toast hidden" id="toast"></div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/effects.js"></script>
+  <script src="/js/table.js"></script>
+</body>
+</html>

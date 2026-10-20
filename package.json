@@ -1,0 +1,18 @@
+{
+  "name": "kings-gambit",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Online multiplayer card game: get your cards to add up to 5 or lower.",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "test": "node --test \"test/*.test.js\""
+  },
+  "engines": {
+    "node": "24.x"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "socket.io": "^4.8.1"
+  }
+}

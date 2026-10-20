@@ -1,0 +1,116 @@
+/* Motion layer for King's Gambit: flying cards, flips, "looked at" glows and the win celebration. */
+
+.fx-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 30;
+}
+
+.fx-ghost {
+  position: fixed;
+  margin: 0;
+  z-index: 31;
+  will-change: transform;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45) !important;
+}
+
+/* A card that is about to arrive by flight stays invisible until it lands. */
+.card.in-flight { visibility: hidden; }
+
+/* Someone looked at this card: a soft pulse plus a little eye badge, for a couple of seconds. */
+.card.looked { animation: looked-pulse 1.3s ease-in-out 2; }
+.card.looked::after {
+  content: "👁";
+  position: absolute;
+  top: -9px;
+  right: -9px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #5ec8ff;
+  color: #002233;
+  font-size: 12px;
+  line-height: 20px;
+  text-align: center;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  animation: looked-badge 0.35s cubic-bezier(.3, 1.6, .5, 1);
+}
+@keyframes looked-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(94, 200, 255, 0), 0 2px 4px rgba(0, 0, 0, 0.35); }
+  50% { box-shadow: 0 0 0 3px rgba(94, 200, 255, 0.75), 0 0 16px rgba(94, 200, 255, 0.55); }
+}
+@keyframes looked-badge { from { transform: scale(0); } to { transform: scale(1); } }
+
+/* ---------- win celebration ---------- */
+
+.fx-confetti {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+}
+
+.fx-win {
+  position: fixed;
+  left: 50%;
+  top: 38%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  padding: 22px 40px 20px;
+  border-radius: 18px;
+  background: radial-gradient(ellipse at 50% 0%, rgba(242, 193, 78, 0.3), rgba(242, 193, 78, 0) 70%), #17181b;
+  border: 2px solid rgba(242, 193, 78, 0.8);
+  box-shadow: 0 0 60px rgba(242, 193, 78, 0.45), 0 20px 50px rgba(0, 0, 0, 0.6);
+  animation: win-in 0.7s cubic-bezier(.2, 1.4, .4, 1) both;
+  max-width: calc(100vw - 32px);
+}
+.fx-win.leaving { animation: win-out 0.5s ease-in forwards; }
+.fx-win-crown {
+  font-size: 54px;
+  line-height: 1;
+  color: #f2c14e;
+  text-shadow: 0 0 24px rgba(242, 193, 78, 0.9);
+  animation: crown-bob 1.2s ease-in-out infinite;
+}
+.fx-win-title {
+  margin-top: 6px;
+  font-size: 34px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  background: linear-gradient(90deg, #fff1c1, #f2c14e, #fff1c1);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shine 2s linear infinite;
+}
+.fx-win-sub { margin-top: 4px; color: #d8dadf; font-weight: 600; }
+.fx-win.you .fx-win-title { font-size: 44px; }
+
+@keyframes win-in {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.4) rotate(-6deg); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(0); }
+}
+@keyframes win-out { to { opacity: 0; transform: translate(-50%, -60%) scale(0.9); } }
+@keyframes crown-bob { 0%, 100% { transform: translateY(0) rotate(-4deg); } 50% { transform: translateY(-6px) rotate(4deg); } }
+@keyframes shine { to { background-position: -200% 0; } }
+
+/* The winning seat keeps glowing after the banner leaves. */
+.seat.winner .plate { animation: winner-glow 1.6s ease-in-out infinite; }
+@keyframes winner-glow {
+  0%, 100% { box-shadow: 0 0 0 2px var(--green), 0 0 14px rgba(63, 164, 91, 0.5); }
+  50% { box-shadow: 0 0 0 3px var(--gold), 0 0 30px rgba(242, 193, 78, 0.7); }
+}
+
+@media (max-width: 640px) {
+  .fx-win { padding: 16px 22px; }
+  .fx-win-title { font-size: 26px; }
+  .fx-win.you .fx-win-title { font-size: 32px; }
+  .fx-win-crown { font-size: 40px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card.looked, .seat.winner .plate, .fx-win-crown, .fx-win-title { animation: none; }
+  .fx-win { animation: none; }
+}

@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>King's Gambit</title>
+  <link rel="stylesheet" href="/css/table.css">
+</head>
+<body class="landing">
+  <main class="landing-card">
+    <div class="landing-logo">♛</div>
+    <h1>King's Gambit</h1>
+    <p class="tagline">Get your cards to add up to <strong>5 or lower</strong>. Peek, swap, match, and knock — 2 to 8 players.</p>
+    <p class="missing hidden" id="missing">That table doesn't exist any more. Start a new one.</p>
+    <button class="btn btn-green btn-big" id="create">Create a table</button>
+    <details class="rules">
+      <summary>How to play</summary>
+      <ul>
+        <li>You get 4 face-down cards. At the start you see your <b>bottom two</b> once — remember them.</li>
+        <li><b>Values:</b> A = 1, 2–10 face value, J/Q/K = 10, <span class="red">red K = −1</span>, Joker = 0.</li>
+        <li><b>Your turn:</b> draw a card, then swap it with one of yours or discard it.</li>
+        <li><b>Powers</b> (for the card you put on the pile on your turn — the one you drew, or the one you swapped out):
+          7/8 look at one of yours · 9/10 look at someone else's · J blind swap ·
+          Q look at any two · K look at two and swap if you want · Joker shuffles everyone else's cards.</li>
+        <li><b>Match</b> any time: tap the discard pile, then a card (yours or anyone's) of the same rank. Take someone else's and you give them one of yours. Wrong guess = penalty card. No triple stacks.</li>
+        <li><b>Knock</b> when you think you're at 5 or lower. Everyone else gets one more turn, and your cards are protected. Then you reveal: over 5 and you're out; otherwise everyone reveals and the lowest total wins.</li>
+      </ul>
+    </details>
+  </main>
+  <script>
+    if (new URLSearchParams(location.search).has('missing')) document.getElementById('missing').classList.remove('hidden');
+    document.getElementById('create').addEventListener('click', async (e) => {
+      e.target.disabled = true;
+      try {
+        const res = await fetch('/api/tables', { method: 'POST' });
+        const { url } = await res.json();
+        location.href = url;
+      } catch {
+        e.target.disabled = false;
+        alert('Could not create a table. Is the server running?');
+      }
+    });
+  </script>
+</body>
+</html>

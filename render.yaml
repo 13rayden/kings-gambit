@@ -1,0 +1,12 @@
+# Render Blueprint: one free Node web service. Tables live in memory,
+# so keep it to a single instance (no scaling) and expect a redeploy,
+# restart, or free-tier sleep to clear every table.
+services:
+  - type: web
+    name: kings-gambit
+    runtime: node
+    plan: free
+    buildCommand: npm ci --omit=dev
+    startCommand: npm start
+    healthCheckPath: /healthz
+    autoDeploy: true

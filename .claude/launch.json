@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "kings-gambit",
+      "runtimeExecutable": "/Users/13raydenlu/.local/node/bin/node",
+      "runtimeArgs": ["server/index.js"],
+      "port": 3000
+    }
+  ]
+}
