@@ -138,7 +138,7 @@ const CARDS = (() => {
         <text x="8" y="30" class="rank">${esc(c.rank)}</text>
         <use href="#ks-${c.suit}" x="7" y="35" width="20" height="20"/>
       </g>
-    </svg>${c.rank === 'K' && c.value < 0 ? '<span class="minus-badge">−1</span>' : ''}`;
+    </svg>`;
   }
 
   /** Extra classes for a face-up card: every King is red, Jokers are marked. */

@@ -5,7 +5,7 @@ const { MAX_PLAYERS, POWER_TEXT } = require('./engine/game');
 
 /** A face-up card as the client sees it. Card ids are never sent, so hidden cards can't be tracked. */
 function face(card) {
-  return { rank: card.rank, suit: card.suit, red: card.red, value: cardValue(card), label: cardLabel(card) };
+  return { rank: card.rank, suit: card.suit, value: cardValue(card), label: cardLabel(card) };
 }
 
 /**

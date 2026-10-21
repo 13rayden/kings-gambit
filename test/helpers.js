@@ -4,10 +4,9 @@ const { Game } = require('../server/engine/game');
 
 let nextId = 1000;
 
-/** A test card, e.g. card('K', 'spiral'). Red suits (Triangle, Spiral: their Kings are −1) are inferred. */
+/** A test card, e.g. card('K', 'spiral'). */
 function card(rank, suit = 'circle') {
-  const red = rank === 'JOKER' ? suit === 'red' : suit === 'triangle' || suit === 'spiral';
-  return { id: nextId++, rank, suit: rank === 'JOKER' ? null : suit, red };
+  return { id: nextId++, rank, suit: rank === 'JOKER' ? null : suit };
 }
 
 /** Deterministic RNG so shuffles are repeatable. */

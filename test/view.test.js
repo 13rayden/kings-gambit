@@ -15,7 +15,7 @@ test("a player's view never contains hidden cards or card ids", () => {
   game.act('a', { type: 'pick', owner: 'a', slot: 1 });
 
   const viewA = buildView(fakeRoom(game), 'a');
-  assert.deepEqual(viewA.seats[0].hand[1], { rank: '3', suit: 'circle', red: false, value: 3, label: '3 of Circles' });
+  assert.deepEqual(viewA.seats[0].hand[1], { rank: '3', suit: 'circle', value: 3, label: '3 of Circles' });
   assert.deepEqual(viewA.seats[0].hand[0], { hidden: true });
   assert.deepEqual(viewA.seats[1].hand, [{ hidden: true }, { hidden: true }, { hidden: true }, { hidden: true }]);
 

@@ -18,8 +18,8 @@ test('card values', () => {
   assert.equal(cardValue(card('10')), 10);
   assert.equal(cardValue(card('J')), 10);
   assert.equal(cardValue(card('Q', 'spiral')), 10);
-  assert.equal(cardValue(card('K', 'circle')), 10);
-  assert.equal(cardValue(card('K', 'chip')), 10);
+  assert.equal(cardValue(card('K', 'circle')), -1, 'every King is red and worth −1');
+  assert.equal(cardValue(card('K', 'chip')), -1);
   assert.equal(cardValue(card('K', 'triangle')), -1);
   assert.equal(cardValue(card('K', 'spiral')), -1);
   assert.equal(cardValue(card('JOKER')), 0);
