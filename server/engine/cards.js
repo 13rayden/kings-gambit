@@ -1,7 +1,15 @@
 'use strict';
 
-/** The four suits. Every King, in any suit, is a red King worth −1. */
-const SUITS = ['triangle', 'circle', 'chip', 'spiral'];
+/**
+ * The four suits. `red` only matters for Kings: the Triangle and Spiral Kings are
+ * red and worth −1; the Circle and Chip Kings are black and worth 10.
+ */
+const SUITS = [
+  { suit: 'triangle', red: true },
+  { suit: 'circle', red: false },
+  { suit: 'chip', red: false },
+  { suit: 'spiral', red: true },
+];
 const SUIT_NAMES = { triangle: 'Triangles', circle: 'Circles', chip: 'Chips', spiral: 'Spirals' };
 const RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
 
@@ -9,11 +17,11 @@ const RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K']
 function makeDeck() {
   const deck = [];
   let id = 0;
-  for (const suit of SUITS) {
-    for (const rank of RANKS) deck.push({ id: id++, rank, suit });
+  for (const { suit, red } of SUITS) {
+    for (const rank of RANKS) deck.push({ id: id++, rank, suit, red });
   }
-  deck.push({ id: id++, rank: 'JOKER', suit: null });
-  deck.push({ id: id++, rank: 'JOKER', suit: null });
+  deck.push({ id: id++, rank: 'JOKER', suit: null, red: false });
+  deck.push({ id: id++, rank: 'JOKER', suit: null, red: false });
   return deck;
 }
 
@@ -26,19 +34,19 @@ function shuffle(cards, rng = Math.random) {
   return cards;
 }
 
-/** Points a card adds to a hand. A=1, 2–10 face value, J/Q=10, K (all red)=−1, Joker=0. */
+/** Points a card adds to a hand. A=1, 2–10 face value, J/Q/black K=10, red K=−1, Joker=0. */
 function cardValue(card) {
   switch (card.rank) {
     case 'A': return 1;
     case 'J':
     case 'Q': return 10;
-    case 'K': return -1;
+    case 'K': return card.red ? -1 : 10;
     case 'JOKER': return 0;
     default: return Number(card.rank);
   }
 }
 
-/** Matching compares rank only, so any K matches any other K. */
+/** Matching compares rank only, so a red K matches a black K. */
 function sameRank(a, b) {
   return a.rank === b.rank;
 }

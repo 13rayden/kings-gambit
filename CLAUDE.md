@@ -25,14 +25,14 @@ An online multiplayer card game for 2–8 players (bots fill empty seats), playe
 
 - 54-card deck including both jokers. Four suits: Triangle, Circle, Chip, Spiral (the client draws them as line-art symbols). When the draw pile is empty, shuffle the discard pile (except its top card) back into it.
 - Each player gets 4 face-down cards in a 2×2 grid. At the start, each player sees their bottom two cards once, then they flip back.
-- **Values:** A=1, 2–10 face value, J=10, Q=10, Joker=0. Every King is a red King, worth −1. Goal: total of 5 or lower.
+- **Values:** A=1, 2–10 face value, J=10, Q=10, Joker=0. The Triangle and Spiral Kings are red Kings worth −1 (drawn in red); the Circle and Chip Kings are black Kings worth 10 (white line art like the rest of the deck). Goal: total of 5 or lower.
 - **Turn:** draw from the deck, then either swap the drawn card with one of your cards (the old one goes to the discard pile) or discard the drawn card.
 - **Powers** trigger for the card the current player puts on the discard pile on their turn: the drawn card if they discard it, or the card they replaced if they swap. Matched, penalty and timed-out discards never trigger a power. Anyone (including the player) can match that card as usual.
   - 7/8: look at one of your own cards.
   - 9/10: look at one of someone else's cards.
   - J: blind swap any two cards from two different players: yours with someone else's, or one other player's with another's. Knockers' cards can't be picked.
   - Q: look at any two cards (yours or others').
-  - K: look at two cards, then optionally swap them.
+  - K / red K: look at two cards, then optionally swap them.
   - Joker: blindly gather the cards of everyone except the player who discarded the Joker (and the knockers), shuffle them, and deal them back into the same slots. Nobody sees the result.
 - **Matching (any time):** whenever the top of the discard pile is a single card, any active player can match it at any moment, even on someone else's turn. There is no timer; the server takes the first match it receives.
   - Matching your own card removes it from your hand (the slot stays empty).

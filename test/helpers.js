@@ -4,9 +4,10 @@ const { Game } = require('../server/engine/game');
 
 let nextId = 1000;
 
-/** A test card, e.g. card('K', 'spiral'). */
+/** A test card, e.g. card('K', 'spiral'). Triangle and Spiral are the red suits (their Kings are −1). */
 function card(rank, suit = 'circle') {
-  return { id: nextId++, rank, suit: rank === 'JOKER' ? null : suit };
+  const red = rank !== 'JOKER' && (suit === 'triangle' || suit === 'spiral');
+  return { id: nextId++, rank, suit: rank === 'JOKER' ? null : suit, red };
 }
 
 /** Deterministic RNG so shuffles are repeatable. */

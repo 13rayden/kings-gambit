@@ -152,8 +152,8 @@ body.room { overflow: hidden; }
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.45);
   overflow: hidden;
 }
-/* Every King is a red King, worth −1. */
-.card.face.king { color: var(--card-red); border-color: var(--card-red); }
+/* Red Kings (Triangle, Spiral) are worth −1 and drawn in red; black Kings stay white like the rest. */
+.card.face.red-king { color: var(--card-red); border-color: var(--card-red); }
 .card .art-svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .card .art-svg .rank { fill: currentColor; font: 800 30px/1 var(--font); }
 .card .art-svg .joker-word { font-size: 15px; letter-spacing: 0.5px; }

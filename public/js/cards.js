@@ -141,10 +141,10 @@ const CARDS = (() => {
     </svg>`;
   }
 
-  /** Extra classes for a face-up card: every King is red, Jokers are marked. */
+  /** Extra classes for a face-up card: red Kings (worth −1) are drawn in red; everything else is white. */
   function faceClasses(c) {
     if (c.rank === 'JOKER') return 'joker';
-    return c.rank === 'K' ? 'king' : '';
+    return c.rank === 'K' && c.red ? 'red-king' : '';
   }
 
   if (document.body) injectSprite();
