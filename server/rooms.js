@@ -180,37 +180,36 @@ class Room {
   schedule() {
     const game = this.game;
     const phase = game.phase;
+    // turnNo restarts every round, so timer keys and checks include the round too.
+    const { round, turnNo } = game;
+    const sameTurn = () => game.round === round && game.turnNo === turnNo;
 
     if (phase === 'initialPeek') {
-      const round = game.round;
       this.ensureTimer(`peek:${round}`, INITIAL_PEEK_MS, () => {
         if (game.phase === 'initialPeek' && game.round === round) game.finishInitialPeek();
       });
     }
 
     if (phase === 'power' && (game.power.step === 'viewing' || game.power.step === 'decide')) {
-      const { turnNo } = game;
       const step = game.power.step;
-      this.ensureTimer(`view:${turnNo}:${step}`, step === 'viewing' ? VIEW_MS : DECIDE_MS, () => {
-        if (game.turnNo === turnNo && game.phase === 'power' && game.power.step === step) game.powerDone(game.turnId);
+      this.ensureTimer(`view:${round}:${turnNo}:${step}`, step === 'viewing' ? VIEW_MS : DECIDE_MS, () => {
+        if (sameTurn() && game.phase === 'power' && game.power.step === step) game.powerDone(game.turnId);
       });
     }
 
     if (phase === 'knockReveal') {
-      const { turnNo } = game;
-      this.ensureTimer(`knock:${turnNo}`, KNOCK_REVEAL_MS, () => {
-        if (game.phase === 'knockReveal' && game.turnNo === turnNo) game.finishKnockReveal();
+      this.ensureTimer(`knock:${round}:${turnNo}`, KNOCK_REVEAL_MS, () => {
+        if (game.phase === 'knockReveal' && sameTurn()) game.finishKnockReveal();
       });
     }
 
     // A human who wanders off doesn't stall the table.
     const current = game.turnId && game.player(game.turnId);
     if (current && !current.isBot && ['turn', 'drawn', 'power'].includes(phase)) {
-      const { turnNo } = game;
-      const key = `turn:${turnNo}`;
+      const key = `turn:${round}:${turnNo}`;
       if (!this.timers.has(key)) this.turnDeadline = Date.now() + TURN_MS;
       this.ensureTimer(key, TURN_MS, () => {
-        if (game.turnNo === turnNo) game.forfeitTurn(current.id);
+        if (sameTurn()) game.forfeitTurn(current.id);
       });
     } else {
       this.turnDeadline = null;

@@ -151,7 +151,7 @@ test('Q: look at any two cards', () => {
 test('K: look at two and swap them', () => {
   const mine = card('9');
   const theirs = card('2');
-  const game = setupGame({ hands: { a: [mine, ...four('3', '4', '5')], b: [theirs, ...four('A', 'A', 'A')] }, deck: [card('K', '♣')] });
+  const game = setupGame({ hands: { a: [mine, ...four('3', '4', '5')], b: [theirs, ...four('A', 'A', 'A')] }, deck: [card('K', 'chip')] });
   game.act('a', { type: 'draw' });
   game.act('a', { type: 'discard' });
   game.act('a', { type: 'pick', owner: 'a', slot: 0 });
@@ -166,7 +166,7 @@ test('K: look at two and swap them', () => {
 
 test('red K has the King power and can keep the cards', () => {
   const mine = card('9');
-  const game = setupGame({ hands: { a: [mine, ...four('3', '4', '5')], b: four('A', 'A', 'A', 'A') }, deck: [card('K', '♥')] });
+  const game = setupGame({ hands: { a: [mine, ...four('3', '4', '5')], b: four('A', 'A', 'A', 'A') }, deck: [card('K', 'triangle')] });
   game.act('a', { type: 'draw' });
   game.act('a', { type: 'discard' });
   assert.equal(game.power.type, 'king');
@@ -200,7 +200,7 @@ test("Joker shuffles everyone's cards except the Joker player's and the knocker'
 });
 
 test('match your own card: the card goes onto the pile and leaves an empty slot', () => {
-  const five = card('5', '♥');
+  const five = card('5', 'triangle');
   const game = setupGame({ hands: { a: four('2', '3', '4', 'A'), b: [five, ...four('A', 'A', 'A')] }, deck: [card('5')] });
   game.act('a', { type: 'draw' });
   game.act('a', { type: 'discard' });
@@ -223,7 +223,7 @@ test('no triple stacking', () => {
 test("match someone else's card, then give them one of yours", () => {
   const theirs = card('8');
   const gift = card('Q');
-  const game = setupGame({ hands: { a: [gift, ...four('3', '4', 'A')], b: [theirs, ...four('A', 'A', 'A')], c: four('2', '2', '2', '2') }, deck: [card('8', '♥')] });
+  const game = setupGame({ hands: { a: [gift, ...four('3', '4', 'A')], b: [theirs, ...four('A', 'A', 'A')], c: four('2', '2', '2', '2') }, deck: [card('8', 'triangle')] });
   game.act('a', { type: 'draw' });
   game.act('a', { type: 'discard' });
   // 8 has a power; a is choosing a card while c matches b's 8 out of turn.
@@ -285,7 +285,7 @@ test('empty deck: the discard pile (minus its top card) becomes the new deck', (
 
 test('knock: everyone else gets one turn, then the lowest total wins', () => {
   const game = setupGame({
-    hands: { a: four('A', '2', 'A', 'A'), b: [card('K', '♥'), card('JOKER'), card('A'), card('A')], c: four('9', '9', '9', '9') },
+    hands: { a: four('A', '2', 'A', 'A'), b: [card('K', 'triangle'), card('JOKER'), card('A'), card('A')], c: four('9', '9', '9', '9') },
     deck: [card('6'), card('6')],
   });
   game.act('a', { type: 'knock' }); // a = 5
@@ -370,7 +370,7 @@ test('new round resets everyone, including players who were out', () => {
 });
 
 test("knocking cancels cards owed to the knocker, whose hand is frozen", () => {
-  const game = setupGame({ hands: { a: four('8', '3', '4', 'A'), b: four('Q', 'A', 'A', 'A'), c: four('2', '2', '2', '2') }, discard: [card('8', '♥')] });
+  const game = setupGame({ hands: { a: four('8', '3', '4', 'A'), b: four('Q', 'A', 'A', 'A'), c: four('2', '2', '2', '2') }, discard: [card('8', 'triangle')] });
   game.act('c', { type: 'match', owner: 'a', slot: 0 }); // c owes a a card
   assert.ok(game.pendingGive.has('c'));
   game.act('a', { type: 'knock' });
@@ -380,12 +380,12 @@ test("knocking cancels cards owed to the knocker, whose hand is frozen", () => {
 });
 
 test("you can't knock while you still owe a card", () => {
-  const game = setupGame({ hands: { a: four('2', '3', '4', 'A'), b: four('8', 'A', 'A', 'A') }, discard: [card('8', '♥')] });
+  const game = setupGame({ hands: { a: four('2', '3', '4', 'A'), b: four('8', 'A', 'A', 'A') }, discard: [card('8', 'triangle')] });
   game.act('a', { type: 'match', owner: 'b', slot: 0 });
   assert.throws(() => game.act('a', { type: 'knock' }), /Give your card/);
   game.act('a', { type: 'give', slot: 1 });
   game.act('a', { type: 'knock' });
-  assert.equal(game.knock.by, 'a');
+  assert.deepEqual(game.knockers, ['a']);
 });
 
 test('a power pick stops counting once that card is matched away', () => {
@@ -395,7 +395,7 @@ test('a power pick stops counting once that card is matched away', () => {
   game.act('a', { type: 'discard' }); // J on top
   game.act('a', { type: 'pick', owner: 'a', slot: 0 });
   // Not a J, so this can't match — but simulate the picked card leaving: a matches it onto a 9.
-  game.discard.push(card('9', '♦'));
+  game.discard.push(card('9', 'spiral'));
   game.topPaired = false;
   game.act('a', { type: 'match', owner: 'a', slot: 0 });
   game.act('a', { type: 'pick', owner: 'b', slot: 0 });
@@ -412,7 +412,7 @@ test('a King cannot swap a card that moved after it was looked at', () => {
   game.act('a', { type: 'discard' });
   game.act('a', { type: 'pick', owner: 'a', slot: 0 });
   game.act('a', { type: 'pick', owner: 'b', slot: 0 });
-  game.discard.push(card('6', '♦'));
+  game.discard.push(card('6', 'spiral'));
   game.topPaired = false;
   game.act('c', { type: 'match', owner: 'b', slot: 0 });
   game.act('c', { type: 'give', slot: 0 }); // b's slot 0 now holds a different card
@@ -461,9 +461,9 @@ test('legalTargets: 7/8 picks your own cards, 9/10 picks anyone else\'s', () => 
   assert.deepEqual(atPower('10', hands()).legalTargets('b'), [], 'only the power player picks');
 });
 
-test('legalTargets: J needs one of yours and one of theirs, never the knocker\'s', () => {
+test('legalTargets: J picks two cards from two different players, never a knocker\'s', () => {
   const game = atPower('J', { a: four('2', '3', '4', '5'), b: four('A', 'A', 'A', 'A'), c: four('6', '6', '6', '6') });
-  game.knock = { by: 'c' };
+  game.knockers = ['c'];
   assert.equal(game.legalTargets('a').length, 8, 'own and b, not the knocker c');
   assert.ok(game.legalTargets('a').every((t) => t.owner !== 'c'));
   game.act('a', { type: 'pick', owner: 'a', slot: 0 });
@@ -472,6 +472,11 @@ test('legalTargets: J needs one of yours and one of theirs, never the knocker\'s
   const other = atPower('J', { a: four('2', '3', '4', '5'), b: four('A', 'A', 'A', 'A') });
   other.act('a', { type: 'pick', owner: 'b', slot: 2 });
   assert.deepEqual(slots(other.legalTargets('a')), ['a0:pick', 'a1:pick', 'a2:pick', 'a3:pick']);
+
+  const three = atPower('J', { a: four('2', '3', '4', '5'), b: four('A', 'A', 'A', 'A'), c: four('6', '6', '6', '6') });
+  three.act('a', { type: 'pick', owner: 'b', slot: 2 });
+  assert.deepEqual(slots(three.legalTargets('a')), ['a0:pick', 'a1:pick', 'a2:pick', 'a3:pick', 'c0:pick', 'c1:pick', 'c2:pick', 'c3:pick'],
+    'after one of b\'s cards: yours or c\'s, but not another of b\'s');
 });
 
 test('legalTargets: Q and K pick any card except one already picked', () => {
@@ -490,7 +495,7 @@ test('legalTargets: Q and K pick any card except one already picked', () => {
 test('legalTargets: a pick that was matched away frees its slot again', () => {
   const game = atPower('J', { a: four('9', '3', '4', '5'), b: four('6', 'A', 'A', 'A'), c: four('2', '2', '2', '2') });
   game.act('a', { type: 'pick', owner: 'a', slot: 0 });
-  game.discard.push(card('9', '♦'));
+  game.discard.push(card('9', 'spiral'));
   game.topPaired = false;
   game.act('c', { type: 'match', owner: 'a', slot: 0 });
   game.act('c', { type: 'give', slot: 0 }); // a's slot 0 holds a new card, so the old pick is gone
@@ -503,12 +508,12 @@ test('legalTargets: every listed pick is accepted by the engine, and nothing els
   for (const rank of ['7', '9', 'J', 'Q', 'K']) {
     const hands = { a: four('2', '3', '4', '5'), b: four('A', 'A', 'A', 'A'), c: four('6', '6', '6', '6') };
     const probe = atPower(rank, hands);
-    probe.knock = { by: 'c' };
+    probe.knockers = ['c'];
     const listed = new Set(slots(probe.legalTargets('a')));
     for (const owner of ['a', 'b', 'c']) {
       for (let slot = 0; slot < 4; slot++) {
         const game = atPower(rank, { a: four('2', '3', '4', '5'), b: four('A', 'A', 'A', 'A'), c: four('6', '6', '6', '6') });
-        game.knock = { by: 'c' };
+        game.knockers = ['c'];
         let ok = true;
         try { game.act('a', { type: 'pick', owner, slot }); } catch (err) { if (!(err instanceof GameError)) throw err; ok = false; }
         assert.equal(ok, listed.has(`${owner}${slot}:pick`), `${rank} pick ${owner}${slot}`);
@@ -518,7 +523,7 @@ test('legalTargets: every listed pick is accepted by the engine, and nothing els
 });
 
 test('legalTargets: owing a card makes your own cards give targets, even on your turn', () => {
-  const game = setupGame({ hands: { a: four('9', '3', '4', '5'), b: four('6', 'A', 'A', 'A') }, deck: [card('2')], discard: [card('6', '♦')] });
+  const game = setupGame({ hands: { a: four('9', '3', '4', '5'), b: four('6', 'A', 'A', 'A') }, deck: [card('2')], discard: [card('6', 'spiral')] });
   game.act('a', { type: 'match', owner: 'b', slot: 0 });
   game.act('a', { type: 'draw' });
   assert.deepEqual(slots(game.legalTargets('a')), ['a0:give', 'a1:give', 'a2:give', 'a3:give']);
@@ -532,9 +537,183 @@ test('matchTargets: any unprotected card, only while you may match', () => {
   game.act('a', { type: 'draw' });
   game.act('a', { type: 'discard' });
   assert.equal(game.matchTargets('b').length, 11, 'empty slots are not targets');
-  game.knock = { by: 'c' };
+  game.knockers = ['c'];
   assert.equal(game.matchTargets('b').length, 7, "the knocker's cards are protected");
   assert.deepEqual(game.matchTargets('c'), [], "the knocker can't match");
   game.topPaired = true;
   assert.deepEqual(game.matchTargets('b'), [], 'no triple stacking');
+});
+
+// ---------- Jack across any two players ----------
+
+test("J can blind swap two other players' cards", () => {
+  const b0 = card('9');
+  const c0 = card('2');
+  const game = atPower('J', { a: four('6', '3', '4', 'A'), b: [b0, ...four('A', 'A', 'A')], c: [c0, ...four('5', '5', '5')] });
+  game.act('a', { type: 'pick', owner: 'b', slot: 0 });
+  assert.throws(() => game.act('a', { type: 'pick', owner: 'b', slot: 1 }), /different player/);
+  game.act('a', { type: 'pick', owner: 'c', slot: 0 });
+  assert.equal(game.player('b').hand[0], c0);
+  assert.equal(game.player('c').hand[0], b0);
+  assert.equal(game.turnId, 'b');
+  assert.match(game.log[game.log.length - 1].text, /A blind-swapped B's card with C's card/);
+});
+
+test("J can't touch any knocker's cards", () => {
+  const game = atPower('J', { a: four('6', '3', '4', 'A'), b: four('A', 'A', 'A', 'A'), c: four('5', '5', '5', '5'), d: four('7', '7', '7', '7') });
+  game.knockers = ['b', 'c'];
+  assert.throws(() => game.act('a', { type: 'pick', owner: 'b', slot: 0 }), /protected/);
+  assert.throws(() => game.act('a', { type: 'pick', owner: 'c', slot: 0 }), /protected/);
+  assert.deepEqual([...new Set(game.legalTargets('a').map((t) => t.owner))].sort(), ['a', 'd']);
+});
+
+// ---------- several knocks ----------
+
+test('another player can knock during the final turns and is protected too', () => {
+  const game = setupGame({
+    hands: { a: four('A', 'A', 'A', '2'), b: four('A', '2', 'A', 'A'), c: four('9', '9', '9', '9') },
+    deck: [card('6'), card('6')],
+    discard: [card('A', 'chip')],
+  });
+  game.act('a', { type: 'knock' });
+  game.act('b', { type: 'knock' }); // b knocks instead of taking their last turn
+  assert.deepEqual(game.knockers, ['a', 'b']);
+  assert.throws(() => game.act('c', { type: 'match', owner: 'b', slot: 0 }), /protected/);
+  assert.throws(() => game.act('b', { type: 'match', owner: 'c', slot: 0 }), /frozen/);
+  assert.equal(game.turnId, 'c');
+  game.act('c', { type: 'draw' });
+  game.act('c', { type: 'discard' });
+  assert.equal(game.phase, 'knockReveal', 'final turns end back at the first knocker');
+  assert.ok(game.canSee('c', 'a', 0) && game.canSee('c', 'b', 0), "every knocker's cards are shown");
+  assert.ok(!game.canSee('a', 'c', 0));
+  assert.deepEqual(game.knockTotals, { a: 5, b: 5 });
+  game.finishKnockReveal();
+  assert.equal(game.phase, 'reveal');
+  assert.deepEqual(game.result.winners.sort(), ['a', 'b'], 'the tie shares the win');
+});
+
+test("you can't knock twice", () => {
+  const game = setupGame({ hands: { a: four('A', 'A', 'A', '2'), b: four('9', '9', '9', '9') }, deck: [card('6')] });
+  game.act('a', { type: 'knock' });
+  game.knockers.push('b'); // pretend b knocked; a's turn can't come round again anyway
+  game.turnId = 'a';
+  game.phase = 'turn';
+  assert.throws(() => game.act('a', { type: 'knock' }), /already knocked/);
+});
+
+test('when one knocker busts and another is safe, the bust is out and everyone else reveals', () => {
+  const game = setupGame({
+    hands: { a: four('A', 'A', 'A', 'A'), b: four('9', '9', '9', '9'), c: four('2', '2', '2', '2') },
+    deck: [card('6')],
+  });
+  game.act('a', { type: 'knock' }); // 4
+  game.act('b', { type: 'knock' }); // 36
+  game.act('c', { type: 'draw' });
+  game.act('c', { type: 'discard' });
+  game.finishKnockReveal();
+  assert.equal(game.player('b').status, 'out');
+  assert.deepEqual(game.player('b').hand, []);
+  assert.equal(game.phase, 'reveal');
+  assert.deepEqual(game.result.winners, ['a']);
+  assert.ok(!('b' in game.result.totals));
+});
+
+test('when every knocker busts, play continues and the next knocker is protected', () => {
+  const game = setupGame({
+    hands: { a: four('9', '9', '9', '9'), b: four('8', '8', '8', '8'), c: four('A', 'A', 'A', 'A'), d: four('5', '5', '5', '5') },
+    deck: [card('6'), card('6'), card('6'), card('6')],
+  });
+  game.act('a', { type: 'knock' });
+  game.act('b', { type: 'knock' });
+  for (const id of ['c', 'd']) {
+    game.act(id, { type: 'draw' });
+    game.act(id, { type: 'discard' });
+  }
+  game.finishKnockReveal();
+  assert.equal(game.player('a').status, 'out');
+  assert.equal(game.player('b').status, 'out');
+  assert.equal(game.phase, 'turn');
+  assert.equal(game.turnId, 'c', "play resumes after the first knocker's seat");
+  assert.deepEqual(game.knockers, []);
+  game.act('c', { type: 'knock' });
+  assert.ok(game.isProtected('c'));
+  game.act('d', { type: 'draw' });
+  game.act('d', { type: 'discard' });
+  assert.equal(game.phase, 'knockReveal');
+  game.finishKnockReveal();
+  assert.deepEqual(game.result.winners, ['c']);
+});
+
+// ---------- wins and who starts ----------
+
+/** Plays a quick round: the given player knocks and everyone else discards a 6. */
+function knockRound(game, knocker) {
+  game.turnId = knocker;
+  game.act(knocker, { type: 'knock' });
+  while (game.phase !== 'knockReveal') {
+    game.deck.push(card('6'));
+    game.act(game.turnId, { type: 'draw' });
+    game.act(game.turnId, { type: 'discard' });
+  }
+  game.finishKnockReveal();
+}
+
+test('every winner gets a win, ties included, and wins add up over rounds', () => {
+  const game = setupGame({ hands: { a: four('A', 'A', 'A', '2'), b: four('A', '2', 'A', 'A'), c: four('9', '9', '9', '9') } });
+  assert.equal(game.player('a').wins, 0);
+  knockRound(game, 'a');
+  assert.deepEqual(game.result.winners.sort(), ['a', 'b']);
+  assert.deepEqual(game.players.map((p) => p.wins), [1, 1, 0]);
+  game.start();
+  for (const [id, cards] of Object.entries({ a: four('9', '9', '9', '9'), b: four('A', 'A', 'A', 'A'), c: four('9', '9', '9', '9') })) game.player(id).hand = cards;
+  game.finishInitialPeek();
+  knockRound(game, 'b');
+  assert.deepEqual(game.players.map((p) => p.wins), [1, 2, 0]);
+});
+
+test("the previous round's winner starts the next round; tied winners take turns", () => {
+  const game = setupGame({ hands: { a: four('9', '9', '9', '9'), b: four('9', '9', '9', '9'), c: four('A', 'A', 'A', 'A') } });
+  game.starterId = 'a';
+  knockRound(game, 'c');
+  game.start();
+  assert.equal(game.turnId, 'c', 'the winner goes first');
+
+  // A tie between a and c: the first of them clockwise after the last starter (c) is a.
+  game.result = { winners: ['a', 'c'], totals: {} };
+  game.phase = 'reveal';
+  game.start();
+  assert.equal(game.turnId, 'a');
+  game.result = { winners: ['a', 'c'], totals: {} };
+  game.phase = 'reveal';
+  game.start();
+  assert.equal(game.turnId, 'c');
+});
+
+test('the turn count restarts every round', () => {
+  const game = setupGame({ hands: { a: four('A', 'A', 'A', 'A'), b: four('9', '9', '9', '9') } });
+  game.turnNo = 300;
+  knockRound(game, 'a');
+  game.start();
+  game.finishInitialPeek();
+  assert.equal(game.turnNo, 1);
+});
+
+test("a winner's count resets when they leave the table", () => {
+  const game = setupGame({ hands: { a: four('A', 'A', 'A', 'A'), b: four('9', '9', '9', '9') } });
+  knockRound(game, 'a');
+  assert.equal(game.player('a').wins, 1);
+  game.removePlayer('a');
+  game.addPlayer({ id: 'a', name: 'A', seat: 0 });
+  assert.equal(game.player('a').wins, 0);
+});
+
+test('if everyone still in knocked and all went over 5, the lowest total wins instead of a stuck table', () => {
+  const game = setupGame({ hands: { a: four('9', '9', '9', '9'), b: four('8', '8', '8', '8') } });
+  game.act('a', { type: 'knock' });
+  game.act('b', { type: 'knock' });
+  assert.equal(game.phase, 'knockReveal');
+  game.finishKnockReveal();
+  assert.equal(game.phase, 'reveal');
+  assert.deepEqual(game.result.winners, ['b']);
+  assert.equal(game.player('b').wins, 1);
 });

@@ -133,8 +133,10 @@ body.room { overflow: hidden; }
 .share b { font-size: 13px; }
 
 /* ---------- cards ---------- */
+
 .card {
   --w: var(--cw);
+  box-sizing: border-box;
   width: var(--w);
   height: calc(var(--w) * 1.4);
   border-radius: calc(var(--w) * 0.12);
@@ -144,32 +146,35 @@ body.room { overflow: hidden; }
   transition: transform 0.15s, box-shadow 0.15s;
 }
 .card.face {
-  background: #fdfdfb;
-  color: var(--card-black);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.35);
-  font-weight: 800;
+  background: #0c0d10;
+  color: #f1f1f1;
+  border: 1px solid rgba(241, 241, 241, 0.85);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
 }
-.card.face.red { color: var(--card-red); }
-.card .corner {
-  position: absolute; left: 8%; top: 5%;
-  font-size: calc(var(--w) * 0.3);
-  line-height: 1;
-  text-align: center;
+/* Every King is drawn in red; the −1 Kings also carry a badge. */
+.card.face.king { color: var(--card-red); border-color: var(--card-red); }
+.card .art-svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.card .art-svg .rank { fill: currentColor; font: 800 30px/1 var(--font); }
+.card .art-svg .joker-word { font-size: 15px; letter-spacing: 0.5px; }
+.card .art-svg use,
+.card .art-svg .art { color: currentColor; }
+.card .art-svg .art { fill: none; stroke: currentColor; stroke-width: 3; stroke-linejoin: round; stroke-linecap: round; }
+.card .art-svg .art .fill { fill: currentColor; stroke: none; }
+.card .minus-badge {
+  position: absolute; left: 6%; bottom: 4%;
+  background: var(--card-red); color: #fff;
+  font-weight: 800; font-size: calc(var(--w) * 0.2); line-height: 1.2;
+  padding: 0 calc(var(--w) * 0.06); border-radius: 3px;
 }
-.card .corner small { display: block; font-size: 0.85em; }
-.card .pip {
-  position: absolute; right: 9%; bottom: 6%;
-  font-size: calc(var(--w) * 0.42);
-  line-height: 1;
-}
-.card.joker .corner { font-size: calc(var(--w) * 0.2); letter-spacing: -0.02em; writing-mode: vertical-rl; }
-.card.joker .pip { font-size: calc(var(--w) * 0.5); }
+/* Suit symbols in the shared sprite (cards.js): thin line art in the card's colour. */
+.sym { fill: none; stroke: currentColor; stroke-width: 4; stroke-linejoin: round; stroke-linecap: round; }
+.sym .fill { fill: currentColor; stroke: none; }
+.sym .fill-soft { fill: currentColor; fill-opacity: 0.25; }
+.sym .thin { stroke-width: 2; opacity: 0.7; }
 .card.back {
-  background:
-    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.18) 0 18%, transparent 19%),
-    repeating-linear-gradient(45deg, #a3283a 0 5px, #8a1f30 5px 10px);
-  border: calc(var(--w) * 0.07) solid #f4f1ea;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.35);
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 140' preserveAspectRatio='none'%3E%3Crect width='100' height='140' fill='%230c0d10'/%3E%3Cg fill='none' stroke='%23f1f1f1' stroke-width='1.1'%3E%3Crect x='7' y='7' width='86' height='126' rx='5'/%3E%3Crect x='11' y='11' width='78' height='118' rx='3' stroke-width='.6' stroke-opacity='.6'/%3E%3Cpath d='M11 11L50 70M89 11L50 70M11 129L50 70M89 129L50 70' stroke-width='.6' stroke-opacity='.55'/%3E%3Ccircle cx='50' cy='70' r='24'/%3E%3Ccircle cx='50' cy='70' r='17' stroke-width='.6'/%3E%3Cpath d='M50.0,40.0L52.7,63.5L71.2,48.8L56.5,67.3L80.0,70.0L56.5,72.7L71.2,91.2L52.7,76.5L50.0,100.0L47.3,76.5L28.8,91.2L43.5,72.7L20.0,70.0L43.5,67.3L28.8,48.8L47.3,63.5Z'/%3E%3Cpath d='M50.0,56.0L52.8,67.2L64.0,70.0L52.8,72.8L50.0,84.0L47.2,72.8L36.0,70.0L47.2,67.2Z' fill='%23f1f1f1' fill-opacity='.85'/%3E%3Cpath d='M50 18L54 24L50 30L46 24ZM50 110L54 116L50 122L46 116Z' stroke-width='.8'/%3E%3C/g%3E%3C/svg%3E") center / 100% 100% no-repeat;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.45);
 }
 .card.empty {
   border: 2px dashed rgba(255, 255, 255, 0.18);
@@ -196,6 +201,14 @@ body.room { overflow: hidden; }
   gap: 5px;
 }
 .seat.me .card { --w: var(--cw-me); }
+/* The card a player just drew waits beside their hand, on the side facing the table's middle. */
+.hand { position: relative; }
+.drawn-slot { position: absolute; top: 50%; transform: translateY(-50%); z-index: 2; }
+.drawn-slot.right { left: calc(100% + 10px); }
+.drawn-slot.left { right: calc(100% + 10px); }
+.seat:not(.me) .drawn-card { --w: calc(var(--cw) * 1.2); }
+.card.drawn-card { box-shadow: 0 0 0 2px var(--gold), 0 0 16px rgba(242, 193, 78, 0.65); }
+.card.drawn-card.peek { box-shadow: 0 0 0 3px var(--gold), 0 0 18px rgba(242, 193, 78, 0.8); }
 /* Your seat hangs below the rim so your bigger cards never cover the piles. */
 .seat.me { transform: translate(-50%, -22%); }
 .seat.me .hand { gap: 8px; }
@@ -210,7 +223,9 @@ body.room { overflow: hidden; }
   position: relative;
   overflow: hidden;
 }
-.plate .name { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.plate .name { font-weight: 700; white-space: nowrap; display: flex; justify-content: center; gap: 5px; min-width: 0; }
+.plate .name .who { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.plate .wins { flex: none; color: var(--gold); font-size: 0.85em; font-weight: 800; }
 .plate .sub { font-size: 11px; color: var(--muted); min-height: 14px; white-space: nowrap; }
 .plate .tag { display: inline-block; font-size: 10px; font-weight: 800; padding: 1px 6px; border-radius: 4px; margin: 0 2px; }
 .tag.knock { background: var(--gold); color: #2a2000; }

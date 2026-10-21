@@ -30,7 +30,7 @@ const POWER_TEXT = {
   blindSwap: {
     title: 'Jack — blind swap',
     short: 'blind swap',
-    help: "Tap one of your cards and one of someone else's to swap them without looking.",
+    help: "Tap two cards from two different players (yours or anyone else's) to swap them without looking.",
     log: 'blind swap',
   },
   peekTwo: {
@@ -76,7 +76,9 @@ class Game {
     this.turnNo = 0;
     this.drawn = null;
     this.power = null; // { type, step: 'select' | 'viewing' | 'decide', picks: [{ owner, slot }] }
-    this.knock = null; // { by, total? }
+    this.knockers = []; // ids in the order they knocked; all of them are protected
+    this.knockTotals = null; // { id: total } while the knockers' cards are shown
+    this.starterId = null; // who took the first turn this round
     this.pendingGive = new Map(); // matcherId -> { to, slot }
     this.visible = new Map(); // playerId -> Set of "owner:slot" the player may currently see
     this.ready = new Set();
@@ -95,7 +97,7 @@ class Game {
     if (!Number.isInteger(seat) || seat < 0 || seat >= MAX_PLAYERS) throw new GameError('No such seat.');
     if (this.players.some((p) => p.seat === seat)) throw new GameError('That seat is taken.');
     if (this.players.some((p) => p.id === id)) throw new GameError('Already seated.');
-    const player = { id, name, isBot, seat, hand: [], status: 'active' };
+    const player = { id, name, isBot, seat, hand: [], status: 'active', wins: 0 };
     this.players.push(player);
     this.players.sort((a, b) => a.seat - b.seat);
     this.version++;
@@ -128,12 +130,17 @@ class Game {
   }
 
   isProtected(id) {
-    return !!this.knock && this.knock.by === id;
+    return this.knockers.includes(id);
+  }
+
+  /** The first player to knock: final turns end when play gets back to them. */
+  firstKnocker() {
+    return this.knockers[0] || null;
   }
 
   canSee(viewerId, owner, slot) {
     if (this.phase === 'reveal') return true;
-    if (this.phase === 'knockReveal' && this.knock && owner === this.knock.by) return true;
+    if (this.phase === 'knockReveal' && this.isProtected(owner)) return true;
     const set = this.visible.get(viewerId);
     return !!set && set.has(`${owner}:${slot}`);
   }
@@ -213,10 +220,8 @@ class Game {
       case 'peekOther':
         return own ? "Pick one of someone else's cards." : null;
       case 'blindSwap':
-        if (!own && this.isProtected(owner)) return "The knocker's cards are protected.";
-        if (picks.some((p) => (p.owner === id) === own)) {
-          return own ? "Now pick someone else's card." : 'Now pick one of your own cards.';
-        }
+        if (this.isProtected(owner)) return "A knocker's cards are protected.";
+        if (picks.some((p) => p.owner === owner)) return "Now pick a card from a different player.";
         return null;
       case 'peekTwo':
       case 'king':
@@ -231,11 +236,14 @@ class Game {
   start() {
     if (!this.canChangeSeats()) throw new GameError('A round is already in progress.');
     if (this.players.length < 2) throw new GameError('Need at least 2 players.');
+    const starter = this.nextStarter();
     this.round++;
+    this.turnNo = 0;
     this.deck = shuffle(makeDeck(), this.rng);
     this.discard = [];
     this.topPaired = false;
-    this.knock = null;
+    this.knockers = [];
+    this.knockTotals = null;
     this.drawn = null;
     this.power = null;
     this.result = null;
@@ -248,12 +256,26 @@ class Game {
       for (let i = 0; i < HAND_SIZE; i++) p.hand.push(this.deck.pop());
       for (const slot of INITIAL_PEEK_SLOTS) this.see(p.id, p.id, slot);
     }
-    const actives = this.activePlayers();
-    this.turnId = actives[(this.round - 1) % actives.length].id;
+    this.turnId = starter;
+    this.starterId = starter;
     this.phase = 'initialPeek';
     this.motion('deal', { hands: this.players.map((p) => ({ owner: p.id, count: p.hand.length })) });
     this.addLog(`Round ${this.round} begins. Everyone looks at their bottom two cards.`);
     this.version++;
+  }
+
+  /**
+   * Who goes first in the next round: the previous round's winner. With tied winners, the first
+   * one clockwise after the previous starter. Round 1 (or no winner still seated) rotates by round.
+   */
+  nextStarter() {
+    const winners = this.result ? this.players.filter((p) => this.result.winners.includes(p.id)) : [];
+    if (winners.length) {
+      const prev = this.player(this.starterId);
+      const after = prev ? prev.seat : -1;
+      return (winners.find((p) => p.seat > after) || winners[0]).id;
+    }
+    return this.players[this.round % this.players.length].id;
   }
 
   markReady(id) {
@@ -308,10 +330,12 @@ class Game {
 
   doKnock(id) {
     this.requireTurn(id, 'turn');
-    if (this.knock) throw new GameError('Someone has already knocked.');
+    if (this.isProtected(id)) throw new GameError('You have already knocked.');
     if (this.pendingGive.has(id)) throw new GameError('Give your card to the player you matched before knocking.');
-    this.knock = { by: id };
-    this.addLog(`${this.name(id)} knocked! Everyone else gets one last turn.`);
+    this.knockers.push(id);
+    this.addLog(this.knockers.length === 1
+      ? `${this.name(id)} knocked! Everyone else gets one last turn.`
+      : `${this.name(id)} knocked too! Their cards are protected as well.`);
     // The knocker's hand is frozen, so nobody can hand them a card any more.
     for (const [matcher, pending] of this.pendingGive) {
       if (pending.to === id) {
@@ -379,7 +403,10 @@ class Game {
       const [a, b] = power.picks;
       this.swapSlots(a, b);
       this.motion('trade', { a: spot(a), b: spot(b) });
-      this.addLog(`${this.name(id)} blind-swapped a card with ${this.name(a.owner === id ? b.owner : a.owner)}.`);
+      const mine = a.owner === id || b.owner === id;
+      this.addLog(mine
+        ? `${this.name(id)} blind-swapped a card with ${this.name(a.owner === id ? b.owner : a.owner)}.`
+        : `${this.name(id)} blind-swapped ${this.name(a.owner)}'s card with ${this.name(b.owner)}'s card.`);
       this.endTurn();
       return;
     }
@@ -494,26 +521,44 @@ class Game {
   /** Called by the server a moment after the knocker's cards are shown. */
   finishKnockReveal() {
     if (this.phase !== 'knockReveal') return;
-    const knocker = this.player(this.knock.by);
-    const total = this.knock.total;
-    if (total > KNOCK_LIMIT) {
-      knocker.status = 'out';
-      const cards = knocker.hand.filter(Boolean);
-      this.discard.unshift(...cards); // keep the top of the pile as it is
-      knocker.hand = [];
-      this.knock = null;
-      this.addLog(`${knocker.name} had ${total} — over ${KNOCK_LIMIT}, so they're out! Play continues.`);
-      const actives = this.activePlayers();
-      if (actives.length === 1) {
-        this.endRound();
-      } else {
-        this.turnId = this.nextActiveAfterSeat(knocker.seat).id;
-        this.phase = 'turn';
-        this.turnNo++;
-      }
-    } else {
-      this.addLog(`${knocker.name} had ${total}. Everyone reveals!`);
+    const first = this.player(this.firstKnocker());
+    const knockers = this.knockers.map((kid) => this.player(kid));
+    const totals = this.knockTotals;
+    const busted = knockers.filter((k) => totals[k.id] > KNOCK_LIMIT);
+    // If everyone still in knocked and all went over, nobody is left to play on: the lowest total wins.
+    if (busted.length === knockers.length && this.activePlayers().every((p) => this.isProtected(p.id))) {
+      this.knockers = [];
+      this.knockTotals = null;
+      this.addLog(`Everyone knocked and went over ${KNOCK_LIMIT}, so the lowest total wins.`);
       this.endRound();
+      this.version++;
+      return;
+    }
+    let anySafe = false;
+    for (const k of knockers) {
+      const total = totals[k.id];
+      if (total > KNOCK_LIMIT) {
+        k.status = 'out';
+        this.discard.unshift(...k.hand.filter(Boolean)); // keep the top of the pile as it is
+        k.hand = [];
+        this.addLog(`${k.name} had ${total} — over ${KNOCK_LIMIT}, so they're out!`);
+      } else {
+        anySafe = true;
+        this.addLog(`${k.name} had ${total}.`);
+      }
+    }
+    this.knockers = [];
+    this.knockTotals = null;
+    if (anySafe) {
+      this.addLog('Everyone reveals!');
+      this.endRound();
+    } else if (this.activePlayers().length === 1) {
+      this.endRound();
+    } else {
+      this.addLog('Play continues until someone else knocks.');
+      this.turnId = this.nextActiveAfterSeat(first.seat).id;
+      this.phase = 'turn';
+      this.turnNo++;
     }
     this.version++;
   }
@@ -525,11 +570,13 @@ class Game {
     this.power = null;
     this.visible.delete(this.turnId);
     const next = this.nextActiveAfterSeat(this.player(this.turnId).seat);
-    if (this.knock && next.id === this.knock.by) {
-      this.knock.total = this.handTotal(this.knock.by);
-      this.turnId = this.knock.by;
+    const first = this.firstKnocker();
+    if (first && next.id === first) {
+      this.knockTotals = Object.fromEntries(this.knockers.map((kid) => [kid, this.handTotal(kid)]));
+      this.turnId = first;
       this.phase = 'knockReveal';
-      this.addLog(`Final turns are over. ${this.name(this.knock.by)} reveals their cards…`);
+      const names = this.knockers.map((kid) => this.name(kid)).join(' and ');
+      this.addLog(`Final turns are over. ${names} reveal${this.knockers.length > 1 ? '' : 's'} their cards…`);
       return;
     }
     this.turnId = next.id;
@@ -548,6 +595,7 @@ class Game {
     for (const p of this.activePlayers()) totals[p.id] = this.handTotal(p.id);
     const best = Math.min(...Object.values(totals));
     const winners = Object.keys(totals).filter((id) => totals[id] === best);
+    for (const id of winners) this.player(id).wins++;
     this.result = { winners, totals };
     const names = winners.map((id) => this.name(id)).join(' and ');
     this.addLog(`${names} win${winners.length > 1 ? '' : 's'} with ${best}!`);

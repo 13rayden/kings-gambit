@@ -71,7 +71,9 @@ const isHost = () => !!view.me && view.hostId === view.me.id;
 const myTurn = () => !!view.me && view.turnId === view.me.id;
 const inPlay = () => ['turn', 'drawn', 'power'].includes(view.phase);
 const between = () => view.phase === 'lobby' || view.phase === 'reveal';
-const label = (c) => (c.rank === 'JOKER' ? 'Joker' : `${c.rank}${c.suit}`);
+const label = (c) => c.label; // "7 of Triangles": the server's wording, same as the game log
+const knockers = () => view.knockers || [];
+const knockerNames = () => knockers().map(nameOf).map(esc).join(' & ');
 
 /* The server says which cards you may try to match; empty means you can't match now. */
 function canMatch() {
@@ -96,10 +98,7 @@ function cardHTML(c, { classes = '', owner = null, slot = null } = {}) {
   const data = owner != null ? ` data-owner="${esc(owner)}" data-slot="${slot}" style="${slotPlace(slot)}"` : '';
   if (c === null) return `<div class="card empty ${classes}"${data}></div>`;
   if (c.hidden) return `<div class="card back ${classes}"${data}></div>`;
-  if (c.rank === 'JOKER') {
-    return `<div class="card face joker ${c.red ? 'red' : ''} ${classes}"${data}><span class="corner">JOKER</span><span class="pip">★</span></div>`;
-  }
-  return `<div class="card face ${c.red ? 'red' : ''} ${classes}"${data}><span class="corner">${c.rank}<small>${c.suit}</small></span><span class="pip">${c.suit}</span></div>`;
+  return `<div class="card face ${CARDS.faceClasses(c)} ${classes}"${data} title="${esc(label(c))}">${CARDS.faceSVG(c)}</div>`;
 }
 
 // ---------- what a tap on a card would do ----------
@@ -184,7 +183,7 @@ function renderSeats() {
     }).join('');
 
     const tags = [];
-    if (s.knocked) tags.push('<span class="tag knock">KNOCKED 🛡</span>');
+    if (s.knocked && s.knockTotal == null) tags.push('<span class="tag knock">KNOCKED 🛡</span>');
     if (s.status === 'out') tags.push('<span class="tag out">OUT</span>');
     if (winners.includes(s.id)) tags.push('<span class="tag win">WINNER</span>');
     if (s.owesCard) tags.push('<span class="tag owes">GIVING</span>');
@@ -192,18 +191,28 @@ function renderSeats() {
     if (s.total != null) sub = `Total: ${s.total}`;
     if (s.knockTotal != null) sub = `Reveals ${s.knockTotal}`;
     const removable = isHost() && between() && !mine;
+    const wins = s.wins ? `<span class="wins" title="${s.wins} win${s.wins > 1 ? 's' : ''}">🏆 ${s.wins}</span>` : '';
 
     html += `<div class="${cls.join(' ')}" data-player="${esc(s.id)}" style="${style}">
-      <div class="hand">${cards}</div>
+      <div class="hand">${cards}${drawnSlotHTML(s, x)}</div>
       <div class="plate">
         ${removable ? `<button class="seat-remove" data-remove="${seatNo}" title="Remove">×</button>` : ''}
-        <div class="name">${esc(s.name)}${mine ? ' (you)' : ''}</div>
+        <div class="name"><span class="who">${esc(s.name)}${mine ? ' (you)' : ''}</span>${wins}</div>
         <div class="sub">${tags.join('') || esc(sub)}</div>
         ${view.turnId === s.id && turnEndsAt ? '<div class="timer" data-timer></div>' : ''}
       </div>
     </div>`;
   }
   els.seats.innerHTML = html;
+}
+
+/* The card a player just drew waits beside their hand (on the side facing the
+   middle of the table), so everyone can see whose turn it is. */
+function drawnSlotHTML(s, x) {
+  if (!view.drawn || view.turnId !== s.id) return '';
+  const classes = ['drawn-card', s.id === myId() ? 'peek' : '', FX.isHidden('drawn') ? 'in-flight' : ''].join(' ');
+  const side = x > 55 ? 'left' : 'right';
+  return `<div class="drawn-slot ${side}" data-pile="drawn">${cardHTML(view.drawn, { classes })}</div>`;
 }
 
 function emptySeatHTML(seatNo) {
@@ -236,16 +245,9 @@ function renderCenter() {
     const pileCls = ['pile', 'discard-pile'];
     if (canMatch()) pileCls.push('armable');
     if (matchArmed) pileCls.push('armed');
-    let drawn = '';
-    if (view.drawn) {
-      const who = myTurn() ? 'Your card' : `${esc(nameOf(view.turnId))}'s card`;
-      const drawnClasses = [myTurn() ? 'peek' : '', FX.isHidden('drawn') ? 'in-flight' : ''].join(' ');
-      drawn = `<div class="pile" data-pile="drawn"><div class="pile-stack">${cardHTML(view.drawn, { classes: drawnClasses })}</div>${who}</div>`;
-    }
     parts.push(`<div class="piles">
       <div class="pile" data-pile="deck"><div class="pile-stack">${view.deckCount ? cardHTML({ hidden: true }) : cardHTML(null)}</div>Deck · ${view.deckCount}</div>
       <div class="${pileCls.join(' ')}" data-discard title="${canMatch() ? 'Tap to match' : ''}"><div class="pile-stack">${discardCards}</div>${d.second ? 'Matched pair' : canMatch() ? 'Tap to match' : 'Discard'}</div>
-      ${drawn}
     </div>`);
   }
   els.center.innerHTML = parts.join('');
@@ -257,9 +259,10 @@ function bannerText() {
   if (p === 'lobby') return { text: `Waiting for players · ${view.seats.filter(Boolean).length}/8 seated` };
   if (p === 'initialPeek') return { text: 'Memorize your bottom two cards!', tone: 'gold' };
   if (p === 'knockReveal') {
-    const s = view.seats.find((x) => x && x.id === view.knockBy);
-    const bust = s && s.knockTotal > 5;
-    return { text: `${esc(s ? s.name : 'The knocker')} reveals ${s ? s.knockTotal : ''} — ${bust ? 'over 5, OUT!' : 'safe!'}`, tone: bust ? 'red' : 'gold' };
+    const shown = view.seats.filter((x) => x && x.knockTotal != null);
+    const allBust = shown.length > 0 && shown.every((x) => x.knockTotal > 5);
+    const parts = shown.map((x) => `${esc(x.name)} ${x.knockTotal} — ${x.knockTotal > 5 ? 'OUT!' : 'safe!'}`);
+    return { text: parts.join(' · ') || 'Revealing…', tone: allBust ? 'red' : 'gold' };
   }
   if (p === 'reveal' && view.result) {
     const names = view.result.winners.map(nameOf).map(esc).join(' & ');
@@ -268,7 +271,7 @@ function bannerText() {
   }
   if (inPlay()) {
     const who = myTurn() ? 'Your turn' : `${esc(nameOf(view.turnId))}'s turn`;
-    return { text: view.knockBy ? `${who} · final turns (${esc(nameOf(view.knockBy))} knocked)` : who };
+    return { text: knockers().length ? `${who} · final turns (${knockerNames()} knocked)` : who };
   }
   return null;
 }
@@ -303,9 +306,11 @@ function renderActions() {
   } else if (me.status === 'out') {
     hint.push("You knocked over 5, so you're out this round. Watch the rest play out.");
   } else if (myTurn() && p === 'turn') {
-    hint.push(view.knockBy ? 'Your final turn — draw a card.' : 'Your turn — draw a card, or knock if you think you have 5 or less.');
+    hint.push(knockers().length
+      ? 'Your final turn — draw a card, or knock too if you think you have 5 or less (your cards get protected).'
+      : 'Your turn — draw a card, or knock if you think you have 5 or less.');
     buttons.push('<button class="btn btn-green" data-act="draw">Draw</button>');
-    if (!view.knockBy) buttons.push('<button class="btn btn-gold" data-act="knock">Knock</button>');
+    if (!knockers().includes(me.id)) buttons.push(`<button class="btn btn-gold" data-act="knock">${knockers().length ? 'Knock too' : 'Knock'}</button>`);
   } else if (myTurn() && p === 'drawn') {
     const c = view.drawn;
     const power = view.drawnPower;
@@ -326,7 +331,7 @@ function renderActions() {
       buttons.push('<button class="btn" data-act="kingKeep">Keep as is</button>');
     }
   } else if (p === 'knockReveal') {
-    hint.push(`${esc(nameOf(view.knockBy))} is revealing…`);
+    hint.push(`${knockerNames()} ${knockers().length > 1 ? 'are' : 'is'} revealing…`);
   } else {
     hint.push(`Waiting for <b>${esc(nameOf(view.turnId))}</b>…`);
   }

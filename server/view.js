@@ -1,11 +1,11 @@
 'use strict';
 
-const { cardValue, powerOf } = require('./engine/cards');
+const { cardValue, powerOf, cardLabel } = require('./engine/cards');
 const { MAX_PLAYERS, POWER_TEXT } = require('./engine/game');
 
 /** A face-up card as the client sees it. Card ids are never sent, so hidden cards can't be tracked. */
 function face(card) {
-  return { rank: card.rank, suit: card.suit, red: card.red, value: cardValue(card) };
+  return { rank: card.rank, suit: card.suit, red: card.red, value: cardValue(card), label: cardLabel(card) };
 }
 
 /**
@@ -34,10 +34,11 @@ function buildView(room, viewerId, feed = room.feed()) {
       isBot: p.isBot,
       status: p.status,
       connected: p.isBot || room.isConnected(p.id),
-      knocked: !!game.knock && game.knock.by === p.id,
+      knocked: game.isProtected(p.id),
+      wins: p.wins,
       hand,
       total: game.result && p.id in game.result.totals ? game.result.totals[p.id] : null,
-      knockTotal: game.phase === 'knockReveal' && game.knock && game.knock.by === p.id ? game.knock.total : null,
+      knockTotal: game.phase === 'knockReveal' && game.knockTotals && p.id in game.knockTotals ? game.knockTotals[p.id] : null,
       owesCard: game.pendingGive.has(p.id),
     });
   }
@@ -56,7 +57,7 @@ function buildView(room, viewerId, feed = room.feed()) {
     turnId: game.turnId,
     turnMsLeft: room.turnDeadline ? Math.max(0, room.turnDeadline - Date.now()) : null,
     turnMs: room.turnMs,
-    knockBy: game.knock ? game.knock.by : null,
+    knockers: game.knockers.slice(),
     seats,
     deckCount: game.deck.length,
     discard: {

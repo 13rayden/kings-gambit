@@ -65,3 +65,15 @@ test('bots finish rounds with only legal moves (2–8 players, many seeds)', () 
     assert.equal(inHands + game.deck.length + game.discard.length, 54, `seed ${seed}: cards went missing`);
   }
 });
+
+test("during someone's final turns a bot only knocks when it knows its hand is 5 or less", () => {
+  const { BotBrain } = require('../server/bots');
+  const { card: c, setupGame: setup } = require('./helpers');
+  const game = setup({ hands: { a: [c('9'), c('9'), c('9'), c('9')], b: [c('A'), c('A'), c('A'), c('A')] } });
+  game.act('a', { type: 'knock' });
+  const brain = new BotBrain('b', () => 0.5);
+  game.turnNo = 500; // late in a long round, when bots would normally take a risk
+  assert.equal(brain.shouldKnock(game), false, "doesn't know its cards");
+  for (let slot = 0; slot < 4; slot++) brain.memory.set(`b:${slot}`, game.player('b').hand[slot]);
+  assert.equal(brain.shouldKnock(game), true, 'knows it has 4');
+});

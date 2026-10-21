@@ -1,11 +1,16 @@
 'use strict';
 
+/**
+ * The four suits. Every King is drawn red, but only the "red" Kings (Triangle and
+ * Spiral) are worth −1; the client marks those with a −1 badge.
+ */
 const SUITS = [
-  { suit: '♠', red: false },
-  { suit: '♥', red: true },
-  { suit: '♦', red: true },
-  { suit: '♣', red: false },
+  { suit: 'triangle', red: true },
+  { suit: 'circle', red: false },
+  { suit: 'chip', red: false },
+  { suit: 'spiral', red: true },
 ];
+const SUIT_NAMES = { triangle: 'Triangles', circle: 'Circles', chip: 'Chips', spiral: 'Spirals' };
 const RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
 
 /** A fresh, unshuffled 54-card deck: 52 cards plus a black and a red Joker. */
@@ -63,7 +68,7 @@ function powerOf(card) {
 
 function cardLabel(card) {
   if (card.rank === 'JOKER') return 'Joker';
-  return `${card.rank}${card.suit}`;
+  return `${card.rank} of ${SUIT_NAMES[card.suit]}`;
 }
 
 module.exports = { makeDeck, shuffle, cardValue, sameRank, powerOf, cardLabel, RANKS };

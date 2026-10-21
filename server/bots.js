@@ -78,10 +78,12 @@ class BotBrain {
   }
 
   shouldKnock(game) {
-    if (game.knock) return false;
+    if (game.isProtected(this.id)) return false;
     const own = this.ownSlots(game);
     const unknown = own.filter((s) => !s.known).length;
     const knownTotal = own.reduce((sum, s) => sum + (s.known ? cardValue(s.known) : 0), 0);
+    // During someone else's final turns, only knock with a hand the bot is sure of.
+    if (game.knockers.length) return unknown === 0 && knownTotal <= KNOCK_LIMIT;
     if (unknown === 0) return knownTotal <= KNOCK_LIMIT;
     // A long round: take a calculated risk, assuming unknown cards are about average.
     if (game.turnNo > 40 && knownTotal + unknown * 4 <= KNOCK_LIMIT) return true;

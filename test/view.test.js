@@ -15,7 +15,7 @@ test("a player's view never contains hidden cards or card ids", () => {
   game.act('a', { type: 'pick', owner: 'a', slot: 1 });
 
   const viewA = buildView(fakeRoom(game), 'a');
-  assert.deepEqual(viewA.seats[0].hand[1], { rank: '3', suit: '♠', red: false, value: 3 });
+  assert.deepEqual(viewA.seats[0].hand[1], { rank: '3', suit: 'circle', red: false, value: 3, label: '3 of Circles' });
   assert.deepEqual(viewA.seats[0].hand[0], { hidden: true });
   assert.deepEqual(viewA.seats[1].hand, [{ hidden: true }, { hidden: true }, { hidden: true }, { hidden: true }]);
 
@@ -91,7 +91,7 @@ test('motions describe public moves by position only', () => {
 });
 
 test('penalty and give motions say where the card landed', () => {
-  const game = setupGame({ hands: { a: four('2', '3', '4', '5'), b: four('8', 'A', 'A', 'A') }, deck: [card('J'), card('8')], discard: [card('8', '♥')] });
+  const game = setupGame({ hands: { a: four('2', '3', '4', '5'), b: four('8', 'A', 'A', 'A') }, deck: [card('J'), card('8')], discard: [card('8', 'triangle')] });
   game.act('a', { type: 'match', owner: 'b', slot: 0 });
   game.act('a', { type: 'give', slot: 2 });
   assert.deepEqual(game.motions.at(-1), { seq: game.motionSeq, kind: 'give', from: { owner: 'a', slot: 2 }, to: { owner: 'b', slot: 0 } });
@@ -102,7 +102,7 @@ test('penalty and give motions say where the card landed', () => {
 });
 
 test('targets carry only owner, slot and kind: never card ids or faces', () => {
-  const game = setupGame({ hands: { a: four('2', '3', '4', '5'), b: four('9', '10', 'J', 'Q') }, deck: [card('K')], discard: [card('9', '♦')] });
+  const game = setupGame({ hands: { a: four('2', '3', '4', '5'), b: four('9', '10', 'J', 'Q') }, deck: [card('K')], discard: [card('9', 'spiral')] });
   game.act('a', { type: 'draw' });
   game.act('a', { type: 'discard' }); // K power
   game.act('a', { type: 'pick', owner: 'b', slot: 0 });
@@ -119,4 +119,22 @@ test('targets carry only owner, slot and kind: never card ids or faces', () => {
       assert.ok(!json.includes(`"rank":${rank}`), `rank ${rank} leaked to ${viewer}`);
     }
   }
+});
+
+test('the view shows every knocker, their reveal totals and each seat\'s wins, but no hidden cards', () => {
+  const game = setupGame({ hands: { a: four('A', 'A', 'A', '2'), b: four('A', '2', 'A', 'A'), c: four('9', '10', 'J', 'Q') }, deck: [card('6')] });
+  game.player('c').wins = 3;
+  game.act('a', { type: 'knock' });
+  game.act('b', { type: 'knock' });
+  const during = buildView(fakeRoom(game), 'c');
+  assert.deepEqual(during.knockers, ['a', 'b']);
+  assert.deepEqual(during.seats.slice(0, 3).map((s) => s.knocked), [true, true, false]);
+  assert.deepEqual(during.seats.slice(0, 3).map((s) => s.wins), [0, 0, 3]);
+  game.act('c', { type: 'draw' });
+  game.act('c', { type: 'discard' });
+  const reveal = buildView(fakeRoom(game), 'c');
+  assert.deepEqual(reveal.seats.slice(0, 3).map((s) => s.knockTotal), [5, 5, null]);
+  assert.equal(reveal.seats[0].hand[0].rank, 'A', "knockers' cards are face up");
+  const json = JSON.stringify(buildView(fakeRoom(game), 'a'));
+  for (const rank of ['"9"', '"10"', '"J"', '"Q"']) assert.ok(!json.includes(`"rank":${rank}`), `c's ${rank} stays hidden`);
 });
