@@ -4,12 +4,12 @@ const crypto = require('crypto');
 const { Game, GameError, MAX_PLAYERS } = require('./engine/game');
 const { BotBrain, BOT_NAMES } = require('./bots');
 const { buildView } = require('./view');
+const store = require('./store');
 
 const INITIAL_PEEK_MS = 6000;
 const VIEW_MS = 6000;
 const DECIDE_MS = 12000;
 const KNOCK_REVEAL_MS = 3500;
-const TURN_MS = 45000;
 const BOT_TURN_MS = [1200, 2200];
 const BOT_REACT_MS = [2500, 4500]; // slow enough that people can win a match race
 const ROOM_IDLE_MS = 6 * 60 * 60 * 1000;
@@ -30,8 +30,38 @@ class Room {
     this.chat = [];
     this.timers = new Map();
     this.turnDeadline = null;
-    this.turnMs = TURN_MS;
     this.lastActive = Date.now();
+  }
+
+  /** The human turn timer, from the host's settings. */
+  get turnMs() {
+    return this.game.settings.turnSeconds * 1000;
+  }
+
+  // ---------- saving (see store.js) ----------
+
+  /** Everything needed to bring this table back after a restart. Bots' memories aren't kept. */
+  snapshot() {
+    return {
+      id: this.id,
+      game: this.game.toJSON(),
+      hostId: this.hostId,
+      tokens: [...this.tokens],
+      bots: [...this.brains.keys()],
+      chat: this.chat,
+      lastActive: this.lastActive,
+    };
+  }
+
+  static restore(snap) {
+    const room = new Room(snap.id);
+    room.game = Game.fromJSON(snap.game);
+    room.hostId = snap.hostId;
+    room.tokens = new Map(snap.tokens);
+    for (const id of snap.bots) room.brains.set(id, new BotBrain(id));
+    room.chat = snap.chat || [];
+    room.lastActive = snap.lastActive || Date.now();
+    return room;
   }
 
   // ---------- connections ----------
@@ -125,6 +155,16 @@ class Room {
     this.changed();
   }
 
+  updateSettings(byId, patch) {
+    this.requireHost(byId);
+    if (!patch || typeof patch !== 'object') throw new GameError('Bad settings.');
+    const allowed = ['handSize', 'matchType', 'target', 'turnSeconds'];
+    const clean = {};
+    for (const key of allowed) if (patch && key in patch) clean[key] = patch[key];
+    this.game.updateSettings(clean);
+    this.changed();
+  }
+
   requireHost(id) {
     if (!id || id !== this.hostId) throw new GameError('Only the host can do that.');
   }
@@ -153,6 +193,7 @@ class Room {
     const name = playerId ? this.game.player(playerId)?.name : null;
     this.say(text, name || 'Spectator');
     this.broadcast();
+    store.save(this);
   }
 
   /** Game log and chat merged in time order, newest last. */
@@ -169,6 +210,7 @@ class Room {
     for (const brain of this.brains.values()) brain.observe(this.game);
     this.schedule();
     this.broadcast();
+    store.save(this);
   }
 
   broadcast() {
@@ -207,8 +249,8 @@ class Room {
     const current = game.turnId && game.player(game.turnId);
     if (current && !current.isBot && ['turn', 'drawn', 'power'].includes(phase)) {
       const key = `turn:${round}:${turnNo}`;
-      if (!this.timers.has(key)) this.turnDeadline = Date.now() + TURN_MS;
-      this.ensureTimer(key, TURN_MS, () => {
+      if (!this.timers.has(key)) this.turnDeadline = Date.now() + this.turnMs;
+      this.ensureTimer(key, this.turnMs, () => {
         if (sameTurn()) game.forfeitTurn(current.id);
       });
     } else {
@@ -266,7 +308,38 @@ function createRoom() {
   do id = randomId(8); while (rooms.has(id));
   const room = new Room(id);
   rooms.set(id, room);
+  store.save(room);
   return room;
+}
+
+/**
+ * A table from memory, or else from the saved tables (after a restart). Tables load
+ * lazily on first use, not at start-up: during a deploy Render keeps the old server
+ * running until the new one is ready, and loading at boot would start a second copy
+ * of every game while the old one is still being played.
+ */
+const loading = new Map(); // id -> Promise<Room|null>
+async function loadRoom(id) {
+  if (rooms.has(id)) return rooms.get(id);
+  if (!store.enabled()) return null;
+  if (!loading.has(id)) {
+    loading.set(id, (async () => {
+      try {
+        const snap = await store.load(id);
+        if (!snap || rooms.has(id)) return rooms.get(id) || null;
+        const room = Room.restore(snap);
+        rooms.set(id, room);
+        room.changed(); // restarts its timers
+        return room;
+      } catch (err) {
+        console.error(`Could not restore table ${id}:`, err.message);
+        return null;
+      } finally {
+        loading.delete(id);
+      }
+    })());
+  }
+  return loading.get(id);
 }
 
 function getRoom(id) {
@@ -280,8 +353,11 @@ setInterval(() => {
     if (room.sockets.size === 0 && now - room.lastActive > ROOM_IDLE_MS) {
       room.close();
       rooms.delete(id);
+      store.remove(id);
+    } else if (room.sockets.size > 0) {
+      store.save(room); // people are still here: keep the saved copy from expiring
     }
   }
 }, 10 * 60 * 1000).unref();
 
-module.exports = { createRoom, getRoom, Room };
+module.exports = { createRoom, getRoom, loadRoom, Room };

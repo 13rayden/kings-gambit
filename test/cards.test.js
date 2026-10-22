@@ -2,14 +2,17 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { makeDeck, cardValue, powerOf, sameRank } = require('../server/engine/cards');
+const { makeDeck, cardValue, powerOf, sameRank, cardLabel } = require('../server/engine/cards');
 const { card } = require('./helpers');
 
-test('deck has 54 unique cards including two jokers', () => {
+test('deck has 56 unique cards including four coloured jokers', () => {
   const deck = makeDeck();
-  assert.equal(deck.length, 54);
-  assert.equal(new Set(deck.map((c) => c.id)).size, 54);
-  assert.equal(deck.filter((c) => c.rank === 'JOKER').length, 2);
+  assert.equal(deck.length, 56);
+  assert.equal(new Set(deck.map((c) => c.id)).size, 56);
+  const jokers = deck.filter((c) => c.rank === 'JOKER');
+  assert.deepEqual(jokers.map((c) => c.color), ['purple', 'green', 'blue', 'gold']);
+  assert.deepEqual(jokers.map(cardLabel), ['Purple Joker', 'Green Joker', 'Blue Joker', 'Gold Joker']);
+  assert.ok(jokers.every((c) => cardValue(c) === 0));
 });
 
 test('card values', () => {
@@ -41,4 +44,5 @@ test('powers', () => {
 test('red and black kings share a rank for matching', () => {
   assert.ok(sameRank(card('K', 'triangle'), card('K', 'circle')));
   assert.ok(!sameRank(card('Q'), card('K')));
+  assert.ok(sameRank(card('JOKER', 'purple'), card('JOKER', 'gold')), 'any Joker matches any Joker');
 });

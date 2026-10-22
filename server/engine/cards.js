@@ -11,17 +11,19 @@ const SUITS = [
   { suit: 'spiral', red: true },
 ];
 const SUIT_NAMES = { triangle: 'Triangles', circle: 'Circles', chip: 'Chips', spiral: 'Spirals' };
+/** Four Jokers, each with its own colour (the client draws each with its own motif). All are worth 0. */
+const JOKER_COLORS = ['purple', 'green', 'blue', 'gold'];
+const COLOR_NAMES = { purple: 'Purple', green: 'Green', blue: 'Blue', gold: 'Gold' };
 const RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
 
-/** A fresh, unshuffled 54-card deck: 52 cards plus two Jokers. */
+/** A fresh, unshuffled 56-card deck: 52 cards plus four coloured Jokers. */
 function makeDeck() {
   const deck = [];
   let id = 0;
   for (const { suit, red } of SUITS) {
     for (const rank of RANKS) deck.push({ id: id++, rank, suit, red });
   }
-  deck.push({ id: id++, rank: 'JOKER', suit: null, red: false });
-  deck.push({ id: id++, rank: 'JOKER', suit: null, red: false });
+  for (const color of JOKER_COLORS) deck.push({ id: id++, rank: 'JOKER', suit: null, red: false, color });
   return deck;
 }
 
@@ -46,7 +48,7 @@ function cardValue(card) {
   }
 }
 
-/** Matching compares rank only, so a red K matches a black K. */
+/** Matching compares rank only, so a red K matches a black K and any Joker matches any Joker. */
 function sameRank(a, b) {
   return a.rank === b.rank;
 }
@@ -67,8 +69,8 @@ function powerOf(card) {
 }
 
 function cardLabel(card) {
-  if (card.rank === 'JOKER') return 'Joker';
+  if (card.rank === 'JOKER') return card.color ? `${COLOR_NAMES[card.color]} Joker` : 'Joker';
   return `${card.rank} of ${SUIT_NAMES[card.suit]}`;
 }
 
-module.exports = { makeDeck, shuffle, cardValue, sameRank, powerOf, cardLabel, RANKS };
+module.exports = { makeDeck, shuffle, cardValue, sameRank, powerOf, cardLabel, RANKS, JOKER_COLORS };

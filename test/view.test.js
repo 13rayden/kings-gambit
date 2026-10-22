@@ -138,3 +138,31 @@ test('the view shows every knocker, their reveal totals and each seat\'s wins, b
   const json = JSON.stringify(buildView(fakeRoom(game), 'a'));
   for (const rank of ['"9"', '"10"', '"J"', '"Q"']) assert.ok(!json.includes(`"rank":${rank}`), `c's ${rank} stays hidden`);
 });
+
+test('5- and 6-card hands stay hidden, and the view carries settings, points and the match ranking', () => {
+  for (const handSize of [5, 6]) {
+    const game = new (require('../server/engine/game').Game)({ rng: require('./helpers').seeded(5) });
+    game.addPlayer({ id: 'a', name: 'A', seat: 0 });
+    game.addPlayer({ id: 'b', name: 'B', seat: 1 });
+    game.updateSettings({ handSize, matchType: 'points', target: 1 });
+    game.start();
+    const view = buildView(fakeRoom(game), 'a');
+    assert.equal(view.seats[0].hand.length, handSize);
+    assert.equal(view.seats[0].hand.filter((c) => !c.hidden).length, 2, 'only your bottom two');
+    assert.ok(view.seats[1].hand.every((c) => c.hidden), "nothing of b's");
+    assert.ok(!/"(id|cardId)":\d/.test(JSON.stringify(view)), 'no card ids');
+    assert.deepEqual(view.settings, { handSize, matchType: 'points', target: 1, turnSeconds: 45 });
+    assert.equal(view.match.inProgress, true);
+  }
+  const game = setupGame({ hands: { a: four('A', 'A', 'A', 'A'), b: four('9', '9', '9', '9') } });
+  game.settings.target = 1;
+  game.act('a', { type: 'knock' });
+  game.deck.push(card('6'));
+  game.act('b', { type: 'draw' });
+  game.act('b', { type: 'discard' });
+  game.finishKnockReveal();
+  const view = buildView(fakeRoom(game), 'b');
+  assert.equal(view.match.over, true);
+  assert.deepEqual(view.match.ranking.map((r) => [r.id, r.place]), [['a', 1], ['b', 2]]);
+  assert.deepEqual(view.seats.slice(0, 2).map((s) => s.points), [4, 36]);
+});

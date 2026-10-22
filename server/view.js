@@ -1,11 +1,16 @@
 'use strict';
 
 const { cardValue, powerOf, cardLabel } = require('./engine/cards');
-const { MAX_PLAYERS, POWER_TEXT } = require('./engine/game');
+const { MAX_PLAYERS, POWER_TEXT, HAND_SIZES, TURN_SECONDS, MAX_TARGET, goalText } = require('./engine/game');
+
+/** The choices the host's settings panel offers (the server checks them again on change). */
+const SETTING_CHOICES = { handSizes: HAND_SIZES, turnSeconds: TURN_SECONDS, maxTarget: MAX_TARGET, matchTypes: ['wins', 'points'] };
 
 /** A face-up card as the client sees it. Card ids are never sent, so hidden cards can't be tracked. */
 function face(card) {
-  return { rank: card.rank, suit: card.suit, red: card.red, value: cardValue(card), label: cardLabel(card) };
+  const out = { rank: card.rank, suit: card.suit, red: card.red, value: cardValue(card), label: cardLabel(card) };
+  if (card.color) out.color = card.color;
+  return out;
 }
 
 /**
@@ -36,6 +41,7 @@ function buildView(room, viewerId, feed = room.feed()) {
       connected: p.isBot || room.isConnected(p.id),
       knocked: game.isProtected(p.id),
       wins: p.wins,
+      points: p.points,
       hand,
       total: game.result && p.id in game.result.totals ? game.result.totals[p.id] : null,
       knockTotal: game.phase === 'knockReveal' && game.knockTotals && p.id in game.knockTotals ? game.knockTotals[p.id] : null,
@@ -84,6 +90,19 @@ function buildView(room, viewerId, feed = room.feed()) {
     pendingGive: me && game.pendingGive.has(me.id) ? { to: game.pendingGive.get(me.id).to } : null,
     ready: me ? game.ready.has(me.id) : false,
     result: game.result,
+    settings: game.settings,
+    // Cards per hand as dealt this round: the client lays hands out from this (bottom row = last two).
+    dealtSize: game.round ? game.dealtSize : game.settings.handSize,
+    settingChoices: SETTING_CHOICES,
+    match: {
+      number: game.matchInfo.number,
+      roundsPlayed: game.matchInfo.roundsPlayed,
+      over: game.matchInfo.over,
+      inProgress: game.matchInProgress(),
+      ranking: game.matchInfo.ranking,
+      standings: game.ranking(), // the current order, for the round recap
+      goal: goalText(game.settings),
+    },
     // Public card movements (positions only) so every screen can animate them.
     motions: game.motions,
     feed,

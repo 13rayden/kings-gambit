@@ -3,10 +3,26 @@
 const { makeDeck, shuffle, cardValue, sameRank, powerOf, cardLabel } = require('./cards');
 
 const MAX_PLAYERS = 8;
-const HAND_SIZE = 4;
-/** Slots are numbered top-left, top-right, bottom-left, bottom-right. */
-const INITIAL_PEEK_SLOTS = [2, 3];
+/**
+ * Card modes: how many cards each player is dealt. Slots are numbered left to right,
+ * top row first; the bottom row is always the last two slots, and those are the
+ * two cards each player sees at the start.
+ */
+const HAND_SIZES = [4, 5, 6];
 const KNOCK_LIMIT = 5;
+const TURN_SECONDS = [15, 30, 45, 60, 90];
+const MATCH_TYPES = ['wins', 'points']; // first to N wins | lowest total after N rounds
+const MAX_TARGET = 20;
+const DEFAULT_SETTINGS = { handSize: 4, matchType: 'wins', target: 5, turnSeconds: 45 };
+
+/** "First to 5 wins" / "Lowest total after 10 rounds": the one wording for a match target. */
+function goalText({ matchType, target }) {
+  const n = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`;
+  return matchType === 'wins' ? `First to ${n(target, 'win')}` : `Lowest total after ${n(target, 'round')}`;
+}
+
+/** The two bottom slots of a freshly dealt hand: the cards each player sees at the start. */
+const initialPeekSlots = (handSize) => [handSize - 2, handSize - 1];
 /** Phases in which anyone may match the top discard. */
 const MATCH_PHASES = new Set(['turn', 'drawn', 'power']);
 
@@ -87,7 +103,40 @@ class Game {
     // Public card movements for the client to animate: positions only, never card identities.
     this.motions = []; // { seq, kind, ... }
     this.motionSeq = 0;
+    this.settings = { ...DEFAULT_SETTINGS };
+    // The match in progress: wins and points live on each player; this tracks the rest.
+    this.matchInfo = { number: 0, roundsPlayed: 0, over: false, ranking: null };
+    this.roundScores = {}; // id -> total for this round, including knockers who went out
+    this.dealtSize = this.settings.handSize; // cards per hand this round (settings may change between matches)
     this.version = 0;
+  }
+
+  // ---------- saving and loading ----------
+
+  /** Everything needed to rebuild this game later (for saved tables). Plain JSON: Maps and Sets become arrays. */
+  toJSON() {
+    const plain = {};
+    for (const [key, value] of Object.entries(this)) {
+      if (key === 'rng') continue;
+      plain[key] = value;
+    }
+    plain.pendingGive = [...this.pendingGive];
+    plain.visible = [...this.visible].map(([viewer, set]) => [viewer, [...set]]);
+    plain.ready = [...this.ready];
+    return plain;
+  }
+
+  /** Rebuilds a game saved with toJSON(). */
+  static fromJSON(data, { rng = Math.random } = {}) {
+    const game = new Game({ rng });
+    for (const [key, value] of Object.entries(data)) {
+      if (key in game && key !== 'rng') game[key] = value;
+    }
+    game.pendingGive = new Map(data.pendingGive || []);
+    game.visible = new Map((data.visible || []).map(([viewer, list]) => [viewer, new Set(list)]));
+    game.ready = new Set(data.ready || []);
+    game.settings = { ...DEFAULT_SETTINGS, ...(data.settings || {}) };
+    return game;
   }
 
   // ---------- seating ----------
@@ -97,7 +146,9 @@ class Game {
     if (!Number.isInteger(seat) || seat < 0 || seat >= MAX_PLAYERS) throw new GameError('No such seat.');
     if (this.players.some((p) => p.seat === seat)) throw new GameError('That seat is taken.');
     if (this.players.some((p) => p.id === id)) throw new GameError('Already seated.');
-    const player = { id, name, isBot, seat, hand: [], status: 'active', wins: 0 };
+    const player = { id, name, isBot, seat, hand: [], status: 'active', wins: 0, points: 0 };
+    // Joining between rounds of a match: no wins yet, and the worst points so far, so arriving late is no advantage.
+    if (this.matchInProgress() && this.players.length) player.points = Math.max(...this.players.map((p) => p.points));
     this.players.push(player);
     this.players.sort((a, b) => a.seat - b.seat);
     this.version++;
@@ -112,6 +163,36 @@ class Game {
 
   canChangeSeats() {
     return this.phase === 'lobby' || this.phase === 'reveal';
+  }
+
+  /** A match has started and hasn't reached its target yet. */
+  matchInProgress() {
+    return this.matchInfo.number > 0 && !this.matchInfo.over;
+  }
+
+  // ---------- settings (host) ----------
+
+  /**
+   * Changes table settings. Card mode and match type/target can only change before a match
+   * starts or after one ends; the turn timer can change any time between rounds.
+   */
+  updateSettings(patch = {}) {
+    if (!this.canChangeSeats()) throw new GameError('Change settings between rounds.');
+    const next = { ...this.settings };
+    const matchKeys = ['handSize', 'matchType', 'target'];
+    for (const key of Object.keys(patch)) {
+      if (!(key in DEFAULT_SETTINGS)) throw new GameError('Unknown setting.');
+      if (matchKeys.includes(key) && patch[key] !== this.settings[key] && this.matchInProgress()) {
+        throw new GameError('Card mode and match type are locked until this match ends.');
+      }
+      next[key] = patch[key];
+    }
+    if (!HAND_SIZES.includes(next.handSize)) throw new GameError('Pick 4, 5 or 6 cards.');
+    if (!MATCH_TYPES.includes(next.matchType)) throw new GameError('Unknown match type.');
+    if (!Number.isInteger(next.target) || next.target < 1 || next.target > MAX_TARGET) throw new GameError(`Pick a target from 1 to ${MAX_TARGET}.`);
+    if (!TURN_SECONDS.includes(next.turnSeconds)) throw new GameError('Pick a turn timer from the list.');
+    this.settings = next;
+    this.version++;
   }
 
   // ---------- queries ----------
@@ -237,6 +318,7 @@ class Game {
     if (!this.canChangeSeats()) throw new GameError('A round is already in progress.');
     if (this.players.length < 2) throw new GameError('Need at least 2 players.');
     const starter = this.nextStarter();
+    if (!this.matchInProgress()) this.startMatch();
     this.round++;
     this.turnNo = 0;
     this.deck = shuffle(makeDeck(), this.rng);
@@ -244,6 +326,8 @@ class Game {
     this.topPaired = false;
     this.knockers = [];
     this.knockTotals = null;
+    this.roundScores = {};
+    this.dealtSize = this.settings.handSize;
     this.drawn = null;
     this.power = null;
     this.result = null;
@@ -253,8 +337,8 @@ class Game {
     for (const p of this.players) {
       p.status = 'active';
       p.hand = [];
-      for (let i = 0; i < HAND_SIZE; i++) p.hand.push(this.deck.pop());
-      for (const slot of INITIAL_PEEK_SLOTS) this.see(p.id, p.id, slot);
+      for (let i = 0; i < this.dealtSize; i++) p.hand.push(this.deck.pop());
+      for (const slot of initialPeekSlots(this.dealtSize)) this.see(p.id, p.id, slot);
     }
     this.turnId = starter;
     this.starterId = starter;
@@ -262,6 +346,16 @@ class Game {
     this.motion('deal', { hands: this.players.map((p) => ({ owner: p.id, count: p.hand.length })) });
     this.addLog(`Round ${this.round} begins. Everyone looks at their bottom two cards.`);
     this.version++;
+  }
+
+  /** Starts a fresh match with the current settings: everyone's wins and points go back to 0. */
+  startMatch() {
+    this.matchInfo = { number: this.matchInfo.number + 1, roundsPlayed: 0, over: false, ranking: null };
+    for (const p of this.players) {
+      p.wins = 0;
+      p.points = 0;
+    }
+    this.addLog(`Match ${this.matchInfo.number} begins: ${goalText(this.settings).toLowerCase()}, ${this.settings.handSize} cards each.`);
   }
 
   /**
@@ -541,6 +635,7 @@ class Game {
         k.status = 'out';
         this.discard.unshift(...k.hand.filter(Boolean)); // keep the top of the pile as it is
         k.hand = [];
+        this.roundScores[k.id] = total; // a knocker who goes out still scores what they revealed
         this.addLog(`${k.name} had ${total} — over ${KNOCK_LIMIT}, so they're out!`);
       } else {
         anySafe = true;
@@ -596,9 +691,43 @@ class Game {
     const best = Math.min(...Object.values(totals));
     const winners = Object.keys(totals).filter((id) => totals[id] === best);
     for (const id of winners) this.player(id).wins++;
-    this.result = { winners, totals };
+    // Everyone who played this round scores their total, including knockers who went out earlier.
+    const scores = { ...this.roundScores, ...totals };
+    for (const [id, score] of Object.entries(scores)) {
+      const p = this.player(id);
+      if (p) p.points += score;
+    }
+    this.matchInfo.roundsPlayed++;
+    const { matchType, target } = this.settings;
+    const over = matchType === 'wins'
+      ? this.players.some((p) => p.wins >= target)
+      : this.matchInfo.roundsPlayed >= target;
+    this.result = { winners, totals, scores };
     const names = winners.map((id) => this.name(id)).join(' and ');
     this.addLog(`${names} win${winners.length > 1 ? '' : 's'} with ${best}!`);
+    if (over) {
+      this.matchInfo.over = true;
+      this.matchInfo.ranking = this.ranking();
+      const champs = this.matchInfo.ranking.filter((r) => r.place === 1).map((r) => this.name(r.id)).join(' and ');
+      this.addLog(`Match over! ${champs} win${this.matchInfo.ranking.filter((r) => r.place === 1).length > 1 ? '' : 's'} the match.`);
+    }
+  }
+
+  /**
+   * Everyone ranked for the match. First-to-N-wins: most wins, then lower points.
+   * Lowest-total: lower points, then more wins. Players still level share a place.
+   */
+  ranking() {
+    const byWins = this.settings.matchType === 'wins';
+    const cmp = (a, b) => (byWins
+      ? (b.wins - a.wins) || (a.points - b.points)
+      : (a.points - b.points) || (b.wins - a.wins));
+    const sorted = [...this.players].sort(cmp);
+    let place = 0;
+    return sorted.map((p, i) => {
+      if (i === 0 || cmp(sorted[i - 1], p) !== 0) place = i + 1;
+      return { id: p.id, place, wins: p.wins, points: p.points };
+    });
   }
 
   nextActiveAfterSeat(seat) {
@@ -719,4 +848,7 @@ class Game {
   }
 }
 
-module.exports = { Game, GameError, MAX_PLAYERS, KNOCK_LIMIT, INITIAL_PEEK_SLOTS, POWER_TEXT };
+module.exports = {
+  Game, GameError, MAX_PLAYERS, KNOCK_LIMIT, POWER_TEXT,
+  HAND_SIZES, TURN_SECONDS, MATCH_TYPES, MAX_TARGET, DEFAULT_SETTINGS, initialPeekSlots, goalText,
+};

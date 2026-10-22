@@ -17,6 +17,7 @@ const els = {
   roundInfo: $('roundInfo'), toast: $('toast'),
   sitModal: $('sitModal'), sitForm: $('sitForm'), nameInput: $('nameInput'), sitCancel: $('sitCancel'),
   chatForm: $('chatForm'), chatInput: $('chatInput'),
+  table: $('table'), settingsModal: $('settingsModal'), settingsForm: $('settingsForm'), podium: $('podium'),
 };
 
 /* Seat positions around the table (percent of the table box), starting with
@@ -52,6 +53,7 @@ socket.on('state', (v) => {
   const fresh = newMotions(v);
   render();
   animate(prev, fresh, pileRects);
+  turnAlert();
 });
 socket.on('problem', toast);
 
@@ -87,11 +89,19 @@ function toast(message) {
   toast.t = setTimeout(() => els.toast.classList.add('hidden'), 2600);
 }
 
-/* The first four slots keep their 2×2 spots (top row 0 1, bottom row 2 3) so
-   players can trust their memory; penalty cards add columns to the right. */
+/* Dealt slots keep fixed spots so players can trust their memory: the top row
+   holds all but the last two, and the bottom row (the last two, the ones you see
+   at the start) sits centred under it. The grid uses half-card columns so a
+   bottom row of two can centre under a top row of three. Penalty cards add
+   columns to the right. */
 function slotPlace(slot) {
-  if (slot < 4) return `grid-row:${Math.floor(slot / 2) + 1};grid-column:${(slot % 2) + 1}`;
-  return `grid-row:${((slot - 4) % 2) + 1};grid-column:${3 + Math.floor((slot - 4) / 2)}`;
+  const dealt = view.dealtSize || 4;
+  const top = dealt - 2;
+  const col = (half) => `grid-column:${half + 1} / span 2`;
+  if (slot < top) return `grid-row:1;${col(slot * 2)}`;
+  if (slot < dealt) return `grid-row:2;${col(top - 2 + (slot - top) * 2)}`;
+  const extra = slot - dealt;
+  return `grid-row:${(extra % 2) + 1};${col(top * 2 + Math.floor(extra / 2) * 2)}`;
 }
 
 function cardHTML(c, { classes = '', owner = null, slot = null } = {}) {
@@ -140,7 +150,9 @@ function render() {
   renderCenter();
   renderActions();
   renderFeed();
-  els.roundInfo.textContent = view.round ? `ROUND ${view.round}` : 'LOBBY';
+  renderPodium();
+  els.table.dataset.dealt = view.dealtSize;
+  els.roundInfo.textContent = roundInfoText();
   scheduleTimer();
 }
 
@@ -191,13 +203,14 @@ function renderSeats() {
     if (s.total != null) sub = `Total: ${s.total}`;
     if (s.knockTotal != null) sub = `Reveals ${s.knockTotal}`;
     const removable = isHost() && between() && !mine;
-    const wins = s.wins ? `<span class="wins" title="${s.wins} win${s.wins > 1 ? 's' : ''}">🏆 ${s.wins}</span>` : '';
+    const wins = view.match.number ? `<div class="wins" title="${s.wins} win${s.wins === 1 ? '' : 's'}, ${s.points} points this match">🏆 ${s.wins}${view.settings.matchType === 'points' ? ` · ${s.points} pts` : ''}</div>` : '';
 
     html += `<div class="${cls.join(' ')}" data-player="${esc(s.id)}" style="${style}">
       <div class="hand">${cards}${drawnSlotHTML(s, x)}</div>
       <div class="plate">
         ${removable ? `<button class="seat-remove" data-remove="${seatNo}" title="Remove">×</button>` : ''}
-        <div class="name"><span class="who">${esc(s.name)}${mine ? ' (you)' : ''}</span>${wins}</div>
+        <div class="name"><span class="who">${esc(s.name)}${mine ? ' (you)' : ''}</span></div>
+        ${wins}
         <div class="sub">${tags.join('') || esc(sub)}</div>
         ${view.turnId === s.id && turnEndsAt ? '<div class="timer" data-timer></div>' : ''}
       </div>
@@ -232,7 +245,10 @@ function renderCenter() {
 
   if (view.phase === 'lobby') {
     parts.push(`<div class="share"><b>Share this link with your friends</b>
-      <button class="btn btn-green btn-small" data-copy>Copy link</button></div>`);
+      <button class="btn btn-green btn-small" data-copy>Copy link</button>
+      <span class="settings-line">${esc(settingsSummary())}</span></div>`);
+  } else if (view.phase === 'reveal' && view.result && !view.match.over) {
+    parts.push(recapHTML());
   } else {
     const d = view.discard;
     const sig = d.top ? `${d.count}:${label(d.top)}` : '';
@@ -291,6 +307,7 @@ function renderActions() {
       const count = view.seats.filter(Boolean).length;
       hint.push(`You're the host. Add bots or wait for friends, then start.<small>${count < 2 ? 'Need at least 2 players.' : `${count} players seated.`}</small>`);
       buttons.push(`<button class="btn" data-fill ${count >= 8 ? 'disabled' : ''}>Fill with bots</button>`);
+      buttons.push('<button class="btn" data-settings>Settings</button>');
       buttons.push(`<button class="btn btn-green" data-start ${count < 2 ? 'disabled' : ''}>Start game</button>`);
     } else {
       hint.push(`Waiting for <b>${esc(nameOf(view.hostId))}</b> to start the game…`);
@@ -299,9 +316,19 @@ function renderActions() {
   } else if (p === 'initialPeek') {
     hint.push('Your bottom two cards are face up — remember them!<small>They flip back in a few seconds.</small>');
     buttons.push(`<button class="btn btn-green" data-act="ready" ${view.ready ? 'disabled' : ''}>${view.ready ? 'Waiting for others…' : "Got it"}</button>`);
+  } else if (p === 'reveal' && view.match.over) {
+    hint.push(isHost()
+      ? 'Match over! Change the settings if you like, then start a new match.'
+      : `Match over! Waiting for <b>${esc(nameOf(view.hostId))}</b> to start a new match.`);
+    if (isHost()) buttons.push('<button class="btn btn-green" data-settings="new">New match</button>');
+    if (podiumHidden === view.match.number) buttons.push('<button class="btn" data-podium>Show podium</button>');
+    buttons.push('<button class="btn btn-ghost" data-leave>Leave seat</button>');
   } else if (p === 'reveal') {
-    hint.push(isHost() ? 'Round over! Start another when everyone is ready.' : `Round over! Waiting for <b>${esc(nameOf(view.hostId))}</b> to start a new round.`);
-    if (isHost()) buttons.push('<button class="btn btn-green" data-start>New round</button>');
+    hint.push(isHost() ? 'Round over! Start the next one when everyone is ready.' : `Round over! Waiting for <b>${esc(nameOf(view.hostId))}</b> to start the next round.`);
+    if (isHost()) {
+      buttons.push('<button class="btn btn-green" data-start>Next round</button>');
+      buttons.push('<button class="btn" data-settings>Settings</button>');
+    }
     buttons.push('<button class="btn btn-ghost" data-leave>Leave seat</button>');
   } else if (me.status === 'out') {
     hint.push("You knocked over 5, so you're out this round. Watch the rest play out.");
@@ -527,6 +554,17 @@ function flipChanges(prev, moved) {
 
 function celebrateWin() {
   if (view.phase !== 'reveal' || !view.result) return;
+  if (view.match.over && view.match.ranking) {
+    const champs = view.match.ranking.filter((r) => r.place === 1).map((r) => r.id);
+    const youWon = champs.includes(myId());
+    FX.celebrate({
+      winnerEls: [...document.querySelectorAll('#podium .step.first .pname')],
+      title: youWon ? (champs.length > 1 ? 'You share the match win!' : 'You win the match!') : `${champs.map(nameOf).join(' & ')} win${champs.length > 1 ? '' : 's'} the match!`,
+      subtitle: matchGoal(),
+      youWon,
+    });
+    return;
+  }
   const { winners, totals } = view.result;
   const me = myId();
   const youWon = winners.includes(me);
@@ -542,12 +580,174 @@ function celebrateWin() {
   });
 }
 
+// ---------- match: settings, recap, podium ----------
+
+let podiumHidden = null; // match number whose podium you closed
+
+const CARD_MODES = { 4: 'Normal (4 cards)', 5: '5 cards (3 on top, 2 below)', 6: '6 cards (4 on top, 2 below)' };
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+const matchGoal = () => view.match.goal; // the server's wording, the same as the game log
+
+function settingsSummary() {
+  const st = view.settings;
+  return `${CARD_MODES[st.handSize]} · ${matchGoal()} · ${st.turnSeconds}s turns`;
+}
+
+function roundInfoText() {
+  if (!view.round) return 'LOBBY';
+  const st = view.settings;
+  const played = view.match.roundsPlayed;
+  if (st.matchType === 'points') {
+    const shown = view.phase === 'reveal' ? played : played + 1;
+    return `ROUND ${Math.min(shown, st.target)} OF ${st.target}`;
+  }
+  return `MATCH ${view.match.number} · FIRST TO ${st.target}`;
+}
+
+/* After each round: everyone's score this round, their match points and wins, in standings order. */
+function recapHTML() {
+  const st = view.settings;
+  const scores = view.result.scores || {};
+  const winners = view.result.winners;
+  const rows = view.match.standings.map((r) => {
+    const s = view.seats.find((x) => x && x.id === r.id);
+    if (!s) return '';
+    const round = r.id in scores ? scores[r.id] : '—';
+    return `<tr class="${winners.includes(r.id) ? 'won' : ''}${r.id === myId() ? ' me' : ''}">
+      <td class="place">${r.place}</td><td class="who">${esc(s.name)}${winners.includes(r.id) ? ' 🏆' : ''}</td>
+      <td>${round}</td><td>${r.points}</td><td>${r.wins}</td></tr>`;
+  }).join('');
+  const progress = st.matchType === 'points'
+    ? `Round ${view.match.roundsPlayed} of ${st.target}`
+    : `Round ${view.match.roundsPlayed} · first to ${plural(st.target, 'win')}`;
+  return `<div class="recap">
+    <div class="recap-head"><b>Round recap</b><span>${esc(progress)}</span></div>
+    <table><thead><tr><th>#</th><th class="who">Player</th><th>Round</th><th>Points</th><th>Wins</th></tr></thead>
+    <tbody>${rows}</tbody></table>
+  </div>`;
+}
+
+/* When a match ends: the top three on pedestals, everyone else ranked below. */
+function renderPodium() {
+  const show = view.phase === 'reveal' && view.match.over && view.match.ranking && podiumHidden !== view.match.number;
+  els.podium.classList.toggle('hidden', !show);
+  els.table.classList.toggle('podium-open', !!show);
+  if (!show) return;
+  const sig = `${view.match.number}:${view.seats.map((s) => s && s.name).join()}`;
+  if (els.podium.dataset.sig === sig) return;
+  els.podium.dataset.sig = sig;
+  const ranking = view.match.ranking.filter((r) => view.seats.some((s) => s && s.id === r.id));
+  const places = [...new Set(ranking.map((r) => r.place))];
+  const group = (i) => ranking.filter((r) => r.place === places[i]);
+  const stat = (r) => (view.settings.matchType === 'wins'
+    ? `${plural(r.wins, 'win')} · ${r.points} pts`
+    : `${r.points} pts · ${plural(r.wins, 'win')}`);
+  const step = (i, cls) => {
+    const people = group(i);
+    if (!people.length) return `<div class="step ${cls} empty"></div>`;
+    return `<div class="step ${cls}">
+      <div class="names">${people.map((r) => `<div class="pname">${esc(nameOf(r.id))}${r.id === myId() ? ' (you)' : ''}</div><div class="pstat">${esc(stat(r))}</div>`).join('')}</div>
+      <div class="block"><span>${places[i]}</span></div>
+    </div>`;
+  };
+  const rest = places.slice(3).flatMap((_, i) => group(i + 3))
+    .map((r) => `<li><b>${r.place}.</b> ${esc(nameOf(r.id))} <span>${esc(stat(r))}</span></li>`).join('');
+  els.podium.innerHTML = `<div class="podium-card">
+    <div class="podium-title">♛ Match over</div>
+    <div class="podium-sub">${esc(matchGoal())}</div>
+    <div class="steps">${step(1, 'second')}${step(0, 'first')}${step(2, 'third')}</div>
+    ${rest ? `<ol class="rest">${rest}</ol>` : ''}
+    <button class="btn btn-ghost" data-podium-hide>View the table</button>
+  </div>`;
+}
+
+/* Host settings. The server checks every value again; this only offers the choices it sent. */
+function openSettings(newMatch) {
+  if (!isHost()) return;
+  const st = view.settings;
+  const ch = view.settingChoices;
+  const locked = view.match.inProgress;
+  const opt = (value, text, current) => `<option value="${value}" ${String(value) === String(current) ? 'selected' : ''}>${esc(text)}</option>`;
+  els.settingsForm.innerHTML = `
+    <h3>${newMatch ? 'New match' : 'Table settings'}</h3>
+    <label>Card mode
+      <select name="handSize" ${locked ? 'disabled' : ''}>${ch.handSizes.map((n) => opt(n, CARD_MODES[n], st.handSize)).join('')}</select></label>
+    <label>Match
+      <select name="matchType" ${locked ? 'disabled' : ''}>
+        ${opt('wins', 'First to N wins', st.matchType)}${opt('points', 'Lowest total after N rounds', st.matchType)}
+      </select></label>
+    <label><span data-target-label>${st.matchType === 'wins' ? 'Wins needed' : 'Number of rounds'}</span>
+      <input name="target" type="number" min="1" max="${ch.maxTarget}" step="1" value="${st.target}" ${locked ? 'disabled' : ''}></label>
+    <label>Turn timer
+      <select name="turnSeconds">${ch.turnSeconds.map((n) => opt(n, `${n} seconds`, st.turnSeconds)).join('')}</select></label>
+    ${locked ? '<small>Card mode and match are locked until this match ends.</small>' : ''}
+    <button class="btn btn-green" type="submit">${newMatch ? 'Start new match' : 'Save'}</button>
+    <button class="btn btn-ghost" type="button" data-close>Cancel</button>`;
+  els.settingsForm.dataset.newMatch = newMatch ? '1' : '';
+  els.settingsModal.classList.remove('hidden');
+}
+
+els.settingsForm.addEventListener('change', (e) => {
+  if (e.target.name !== 'matchType') return;
+  els.settingsForm.querySelector('[data-target-label]').textContent = e.target.value === 'wins' ? 'Wins needed' : 'Number of rounds';
+});
+els.settingsForm.addEventListener('click', (e) => {
+  if (e.target.closest('[data-close]')) els.settingsModal.classList.add('hidden');
+});
+els.settingsForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const f = new FormData(els.settingsForm);
+  const patch = { turnSeconds: Number(f.get('turnSeconds')) };
+  if (!view.match.inProgress) {
+    patch.handSize = Number(f.get('handSize'));
+    patch.matchType = f.get('matchType');
+    patch.target = Number(f.get('target'));
+  }
+  const newMatch = !!els.settingsForm.dataset.newMatch;
+  socket.emit('settings', patch, (res) => {
+    if (!res.ok) return toast(res.error);
+    els.settingsModal.classList.add('hidden');
+    if (newMatch) send('start');
+  });
+});
+
+// ---------- "your turn" alert when the tab is in the background ----------
+
+const baseTitle = document.title;
+let titleFlash = null;
+
+function stopTitleFlash() {
+  clearInterval(titleFlash);
+  titleFlash = null;
+  document.title = baseTitle;
+}
+
+function startTitleFlash() {
+  if (titleFlash) return;
+  let on = true; // the title starts on "Your turn!", so the first tick switches back
+  titleFlash = setInterval(() => {
+    on = !on;
+    document.title = on ? '🔔 Your turn!' : baseTitle;
+  }, 900);
+  document.title = '🔔 Your turn!';
+}
+
+/* Flash while it's your turn and this tab is in the background, whether the turn
+   started while you were away or you switched away during it. */
+function turnAlert() {
+  if (myTurn() && inPlay() && document.hidden) startTitleFlash();
+  else stopTitleFlash();
+}
+
+document.addEventListener('visibilitychange', () => { if (view) turnAlert(); });
+
 window.addEventListener('fx:changed', () => render());
 
 // ---------- events ----------
 
 document.addEventListener('click', (e) => {
-  const t = e.target.closest('[data-owner],[data-discard],[data-act],[data-sit],[data-bot],[data-remove],[data-start],[data-fill],[data-leave],[data-copy],[data-match]');
+  const t = e.target.closest('[data-owner],[data-discard],[data-act],[data-sit],[data-bot],[data-remove],[data-start],[data-fill],[data-leave],[data-copy],[data-match],[data-settings],[data-podium],[data-podium-hide]');
   if (!t) return;
   const d = t.dataset;
   if (d.owner != null) onCardTap(d.owner, Number(d.slot));
@@ -559,6 +759,9 @@ document.addEventListener('click', (e) => {
   else if (d.remove != null) send('removeSeat', { seat: Number(d.remove) });
   else if (d.start != null) send('start');
   else if (d.fill != null) send('fillBots');
+  else if (d.settings != null) openSettings(d.settings === 'new');
+  else if (d.podium != null) { podiumHidden = null; render(); }
+  else if (d.podiumHide != null) { podiumHidden = view.match.number; render(); }
   else if (d.leave != null) {
     socket.emit('leave', {}, (res) => (res.ok ? store.del(tokenKey) : toast(res.error)));
   } else if (d.copy != null) {

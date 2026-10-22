@@ -105,6 +105,44 @@ const CARDS = (() => {
       <use href="#ks-${suit}" x="37" y="68" width="26" height="26"/>`;
   }
 
+  // The four Jokers: each has its own colour, corner motif and motto.
+  const JOKERS = {
+    purple: { motif: 'triangle', motto: ['CHAOS BRINGS', 'THE FUN'] },
+    green: { motif: 'chip', motto: ['RULES ARE', 'OPTIONAL'] },
+    blue: { motif: 'star', motto: ['LUCK FAVORS', 'THE ANNOYING'] },
+    gold: { motif: 'spiral', motto: ['NEVER', 'SERIOUS'] },
+  };
+
+  /** A grinning jester in a three-pointed hat, holding a card. */
+  const JESTER = `
+    <g class="art">
+      <path d="M38,56 Q28,40 18,47"/><path d="M46,52 Q47,32 58,25"/><path d="M61,55 Q72,39 83,45"/>
+      <path d="M37,57 Q50,47 63,57"/>
+      <circle cx="17" cy="48" r="2.6" class="fill"/><circle cx="59" cy="24" r="2.6" class="fill"/><circle cx="84" cy="46" r="2.6" class="fill"/>
+      <circle cx="50" cy="66" r="11"/>
+      <path d="M44,62 L48,64M56,62 L52,64"/>
+      <path d="M43,70 Q50,77 57,70"/>
+      <path d="M33,84 L37,79 L41,84 L45,79 L50,84 L55,79 L59,84 L63,79 L67,84"/>
+      <path d="M36,84 Q33,97 31,108M64,84 Q67,97 69,108"/>
+      <rect x="66" y="90" width="11" height="16" rx="1.5" transform="rotate(16 71 98)"/>
+    </g>`;
+
+  function jokerSVG(c) {
+    const j = JOKERS[c.color] || JOKERS.purple;
+    const letters = (x, y0) => [...'JOKER'].map((ch, i) => `<text x="${x}" y="${y0 + i * 12}" class="rank joker-letter">${ch}</text>`).join('');
+    return `<svg viewBox="0 0 100 140" class="art-svg">
+      ${letters(7, 18)}
+      <use href="#ks-${j.motif}" x="74" y="5" width="21" height="21"/>
+      ${JESTER}
+      <text x="52" y="114" class="motto">${j.motto[0]}</text>
+      <text x="52" y="120" class="motto">${j.motto[1]}</text>
+      <g transform="rotate(180 50 70)">
+        ${letters(7, 18)}
+        <use href="#ks-${j.motif}" x="74" y="5" width="21" height="21"/>
+      </g>
+    </svg>`;
+  }
+
   function injectSprite() {
     if (document.getElementById('kg-card-sprite')) return;
     const svg = document.createElementNS(NS, 'svg');
@@ -121,13 +159,7 @@ const CARDS = (() => {
 
   /** The inner SVG of a face-up card (rank, suit icons, centre art). */
   function faceSVG(c) {
-    if (c.rank === 'JOKER') {
-      return `<svg viewBox="0 0 100 140" class="art-svg">
-        <text x="9" y="22" class="rank joker-word">JOKER</text>
-        <use href="#ks-star" x="18" y="38" width="64" height="64"/>
-        <text x="91" y="118" class="rank joker-word" transform="rotate(180 91 118)">JOKER</text>
-      </svg>`;
-    }
+    if (c.rank === 'JOKER') return jokerSVG(c);
     const face = c.rank === 'J' || c.rank === 'Q' || c.rank === 'K';
     const centre = face ? figure(c.rank, c.suit) : `<use href="#ks-${c.suit}" x="14" y="36" width="72" height="72"/>`;
     return `<svg viewBox="0 0 100 140" class="art-svg">
@@ -143,7 +175,7 @@ const CARDS = (() => {
 
   /** Extra classes for a face-up card: red Kings (worth −1) are drawn in red; everything else is white. */
   function faceClasses(c) {
-    if (c.rank === 'JOKER') return 'joker';
+    if (c.rank === 'JOKER') return `joker joker-${JOKERS[c.color] ? c.color : 'purple'}`;
     return c.rank === 'K' && c.red ? 'red-king' : '';
   }
 

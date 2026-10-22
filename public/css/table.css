@@ -156,7 +156,14 @@ body.room { overflow: hidden; }
 .card.face.red-king { color: var(--card-red); border-color: var(--card-red); }
 .card .art-svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .card .art-svg .rank { fill: currentColor; font: 800 30px/1 var(--font); }
-.card .art-svg .joker-word { font-size: 15px; letter-spacing: 0.5px; }
+.card .art-svg .joker-letter { font-size: 12px; }
+.card .art-svg .motto { fill: currentColor; font: 700 4.6px/1 var(--font); letter-spacing: 0.8px; text-anchor: middle; opacity: 0.85; }
+/* The four Jokers, each in its own colour. */
+.card.face.joker .art-svg .art { stroke-width: 2.4; }
+.card.face.joker-purple { color: #b26dff; border-color: #b26dff; }
+.card.face.joker-green { color: #44e07a; border-color: #44e07a; }
+.card.face.joker-blue { color: #4a95ff; border-color: #4a95ff; }
+.card.face.joker-gold { color: #f4c542; border-color: #f4c542; }
 .card .art-svg use,
 .card .art-svg .art { color: currentColor; }
 .card .art-svg .art { fill: none; stroke: currentColor; stroke-width: 3; stroke-linejoin: round; stroke-linecap: round; }
@@ -190,22 +197,31 @@ body.room { overflow: hidden; }
   display: flex; flex-direction: column; align-items: center; gap: 6px;
 }
 .hand {
+  /* Half-card columns: each card spans two, so a bottom row of two can centre under a top row of three. */
+  --hw: var(--cw);
+  --gap: 5px;
   display: grid;
-  grid-auto-columns: auto;
-  gap: 5px;
+  grid-auto-columns: calc((var(--hw) - var(--gap)) / 2);
+  gap: var(--gap);
 }
 .seat.me .card { --w: var(--cw-me); }
+/* Wider hands (5 or 6 cards) shrink the other players' cards so the seats don't collide. */
+.table { --seat-scale: 1; }
+.table[data-dealt="5"] { --seat-scale: 0.82; }
+.table[data-dealt="6"] { --seat-scale: 0.68; }
+.seat:not(.me) .card { --w: calc(var(--cw) * var(--seat-scale)); }
+.seat:not(.me) .hand { --hw: calc(var(--cw) * var(--seat-scale)); }
 /* The card a player just drew waits beside their hand, on the side facing the table's middle. */
 .hand { position: relative; }
 .drawn-slot { position: absolute; top: 50%; transform: translateY(-50%); z-index: 2; }
 .drawn-slot.right { left: calc(100% + 10px); }
 .drawn-slot.left { right: calc(100% + 10px); }
-.seat:not(.me) .drawn-card { --w: calc(var(--cw) * 1.2); }
+.seat:not(.me) .drawn-card { --w: calc(var(--cw) * var(--seat-scale) * 1.2); }
 .card.drawn-card { box-shadow: 0 0 0 2px var(--gold), 0 0 16px rgba(242, 193, 78, 0.65); }
 .card.drawn-card.peek { box-shadow: 0 0 0 3px var(--gold), 0 0 18px rgba(242, 193, 78, 0.8); }
 /* Your seat hangs below the rim so your bigger cards never cover the piles. */
 .seat.me { transform: translate(-50%, -22%); }
-.seat.me .hand { gap: 8px; }
+.seat.me .hand { --gap: 8px; --hw: var(--cw-me); }
 .plate {
   min-width: 112px;
   max-width: 150px;
@@ -219,7 +235,7 @@ body.room { overflow: hidden; }
 }
 .plate .name { font-weight: 700; white-space: nowrap; display: flex; justify-content: center; gap: 5px; min-width: 0; }
 .plate .name .who { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.plate .wins { flex: none; color: var(--gold); font-size: 0.85em; font-weight: 800; }
+.plate .wins { color: var(--gold); font-size: 11px; font-weight: 800; white-space: nowrap; line-height: 1.3; }
 .plate .sub { font-size: 11px; color: var(--muted); min-height: 14px; white-space: nowrap; }
 .plate .tag { display: inline-block; font-size: 10px; font-weight: 800; padding: 1px 6px; border-radius: 4px; margin: 0 2px; }
 .tag.knock { background: var(--gold); color: #2a2000; }
@@ -325,4 +341,72 @@ body.room { overflow: hidden; }
   .actions, .feed-panel { position: static; width: auto; margin: 10px 16px; }
   .actions { position: sticky; bottom: 8px; z-index: 6; min-height: 0; box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.5); }
   .feed-panel { height: 180px; }
+}
+
+/* ---------- matches: settings, round recap, podium ---------- */
+.share .settings-line { font-size: 11px; color: #555; text-align: center; max-width: 240px; }
+.settings-card h3 { margin: 0 0 4px; font-size: 16px; }
+.settings-card label { display: flex; flex-direction: column; gap: 4px; }
+.settings-card select, .settings-card input { border: 1px solid #ccc; border-radius: 6px; padding: 8px; font: inherit; font-size: 14px; background: #fff; color: #222; }
+.settings-card small { color: #666; }
+
+.recap {
+  background: rgba(10, 12, 14, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  padding: 8px 10px;
+  width: min(330px, 100%);
+  font-size: 12px;
+}
+.recap-head { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+.recap-head span { color: var(--muted); }
+.recap table { width: 100%; border-collapse: collapse; }
+.recap th { color: var(--muted); font-weight: 600; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; }
+.recap th, .recap td { padding: 3px 4px; text-align: right; }
+.recap .who { text-align: left; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recap .place { color: var(--muted); text-align: left; width: 16px; }
+.recap tr.won td { color: var(--gold); font-weight: 700; }
+.recap tr.me .who { text-decoration: underline; }
+
+.podium {
+  position: absolute; inset: 0; z-index: 8;
+  display: grid; place-items: center;
+  background: rgba(8, 9, 11, 0.82);
+  border-radius: 40px;
+  padding: 12px;
+}
+.table.podium-open .center { visibility: hidden; }
+.podium-card { display: flex; flex-direction: column; align-items: center; gap: 8px; width: min(520px, 100%); text-align: center; }
+.podium-title { font-size: 24px; font-weight: 800; color: var(--gold); }
+.podium-sub { color: var(--muted); font-size: 12px; margin-top: -6px; }
+.steps { display: flex; align-items: flex-end; justify-content: center; gap: 10px; width: 100%; margin-top: 6px; }
+.step { flex: 1; max-width: 150px; display: flex; flex-direction: column; align-items: stretch; gap: 6px; }
+.step .names { min-height: 34px; display: flex; flex-direction: column; justify-content: flex-end; gap: 2px; }
+.step .pname { font-weight: 800; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.step .pstat { font-size: 11px; color: var(--muted); }
+.step .block {
+  display: grid; place-items: center;
+  border-radius: 8px 8px 2px 2px;
+  font-size: 26px; font-weight: 900; color: rgba(0, 0, 0, 0.55);
+  box-shadow: inset 0 -6px 0 rgba(0, 0, 0, 0.18);
+}
+.step.first .block { height: 120px; background: linear-gradient(#ffe48a, var(--gold)); }
+.step.second .block { height: 86px; background: linear-gradient(#f1f3f5, #b9c0c8); }
+.step.third .block { height: 62px; background: linear-gradient(#f2c19b, #c98652); }
+.step.empty { visibility: hidden; }
+.step.first .pname { font-size: 16px; color: var(--gold); }
+.podium .rest { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 14px; font-size: 12px; }
+.podium .rest span { color: var(--muted); }
+
+@media (max-width: 640px) {
+  .podium { border-radius: 45% / 40%; }
+  .podium-title { font-size: 18px; }
+  .step .pname { font-size: 12px; }
+  .step.first .block { height: 84px; }
+  .step.second .block { height: 60px; }
+  .step.third .block { height: 44px; }
+  .recap { font-size: 10px; padding: 6px; }
+  .recap th, .recap td { padding: 2px; }
+  .recap th { font-size: 8px; }
+  .recap .who { max-width: 64px; }
 }

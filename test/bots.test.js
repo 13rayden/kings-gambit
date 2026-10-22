@@ -7,7 +7,7 @@ const { BotBrain } = require('../server/bots');
 const { seeded } = require('./helpers');
 
 /** Plays a full round with only bots, the way the server drives them. Returns the step count. */
-function playBotRound(seed, playerCount) {
+function playBotRound(seed, playerCount, handSize = 4) {
   const rng = seeded(seed);
   const game = new Game({ rng });
   const brains = [];
@@ -15,6 +15,7 @@ function playBotRound(seed, playerCount) {
     game.addPlayer({ id: `bot${seat}`, name: `Bot ${seat}`, isBot: true, seat });
     brains.push(new BotBrain(`bot${seat}`, rng));
   }
+  game.updateSettings({ handSize });
   game.start();
   let steps = 0;
   while (game.phase !== 'reveal') {
@@ -62,7 +63,7 @@ test('bots finish rounds with only legal moves (2–8 players, many seeds)', () 
     assert.ok(game.result.winners.length >= 1);
     // Every card is still accounted for.
     const inHands = game.players.reduce((n, p) => n + p.hand.filter(Boolean).length, 0);
-    assert.equal(inHands + game.deck.length + game.discard.length, 54, `seed ${seed}: cards went missing`);
+    assert.equal(inHands + game.deck.length + game.discard.length, 56, `seed ${seed}: cards went missing`);
   }
 });
 
@@ -76,4 +77,15 @@ test("during someone's final turns a bot only knocks when it knows its hand is 5
   assert.equal(brain.shouldKnock(game), false, "doesn't know its cards");
   for (let slot = 0; slot < 4; slot++) brain.memory.set(`b:${slot}`, game.player('b').hand[slot]);
   assert.equal(brain.shouldKnock(game), true, 'knows it has 4');
+});
+
+test('bots also finish 5- and 6-card rounds legally, even with 8 players and a small deck', () => {
+  for (let seed = 1; seed <= 40; seed++) {
+    const handSize = seed % 2 ? 5 : 6;
+    const players = 2 + (seed % 7);
+    const { game } = playBotRound(seed, players, handSize);
+    assert.equal(game.phase, 'reveal');
+    const inHands = game.players.reduce((n, p) => n + p.hand.filter(Boolean).length, 0);
+    assert.equal(inHands + game.deck.length + game.discard.length, 56, `seed ${seed}: cards went missing`);
+  }
 });

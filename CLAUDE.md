@@ -23,8 +23,8 @@ An online multiplayer card game for 2–8 players (bots fill empty seats), playe
 
 ## Game rules (source of truth)
 
-- 54-card deck including both jokers. Four suits: Triangle, Circle, Chip, Spiral (the client draws them as line-art symbols). When the draw pile is empty, shuffle the discard pile (except its top card) back into it.
-- Each player gets 4 face-down cards in a 2×2 grid. At the start, each player sees their bottom two cards once, then they flip back.
+- 56-card deck: 52 cards plus four Jokers (purple, green, blue, gold; all worth 0, any Joker matches any Joker). Four suits: Triangle, Circle, Chip, Spiral (the client draws them as line-art symbols). When the draw pile is empty, shuffle the discard pile (except its top card) back into it.
+- **Card modes** (host setting): Normal = 4 cards (2 on top, 2 below), 5 cards (3 on top, 2 below), 6 cards (4 on top, 2 below). Cards are dealt face down; the bottom row is always the last two slots, and at the start each player sees only those two, once, then they flip back. All other rules are the same in every mode.
 - **Values:** A=1, 2–10 face value, J=10, Q=10, Joker=0. The Triangle and Spiral Kings are red Kings worth −1 (drawn in red); the Circle and Chip Kings are black Kings worth 10 (white line art like the rest of the deck). Goal: total of 5 or lower.
 - **Turn:** draw from the deck, then either swap the drawn card with one of your cards (the old one goes to the discard pile) or discard the drawn card.
 - **Powers** trigger for the card the current player puts on the discard pile on their turn: the drawn card if they discard it, or the card they replaced if they swap. Matched, penalty and timed-out discards never trigger a power. Anyone (including the player) can match that card as usual.
@@ -46,12 +46,18 @@ An online multiplayer card game for 2–8 players (bots fill empty seats), playe
   - If at least one knocker has 5 or lower: everyone still in reveals; the lowest total wins (even if it isn't a knocker). Ties share the win.
   - If everyone still in the round knocked and all were over 5, nobody is knocked out: the lowest total wins (ties share).
   - If every knocker was over 5: play resumes from the player after the first knocker's seat until someone knocks again (and is protected again), and so on. If only one player is left, they win.
-- **Wins:** every winner of a round (all tied winners too) adds one to their win counter, shown on their seat. The counter lasts while they keep their seat at the table.
+- **Matches:** rounds are played in a match with a target the host sets: **first to N wins** (default 5) or **lowest total after N rounds** (N from 1 to 20).
+  - Every winner of a round (all tied winners too) gets a win. Every player also adds their round total to their match points; a knocker who went out scores the total they revealed.
+  - First to N wins: the match ends after the round in which someone reaches N wins. Lowest total: it ends after N rounds.
+  - Ranking: first-to-N ranks by most wins, then fewest points; lowest-total ranks by fewest points, then most wins. Players still level share the place. The end of a match shows a podium.
+  - Someone who sits down between rounds of a match starts with 0 wins and the highest points total so far.
+  - A new match resets everyone's wins and points.
+- **Host settings:** card mode, match type and target can change in the lobby or after a match ends (they're locked during a match); the turn timer (15/30/45/60/90 s) can change between any two rounds.
 - **Who starts:** the previous round's winner takes the first turn of the next round. With tied winners, the first of them clockwise after the previous round's starter goes first. Round 1 starts at the lowest seat.
-- Single round, then the host can start a "New round".
+- After each round a recap shows everyone's round total, match points and wins; the host starts the next round.
 - **Knock edge cases:** you can't knock twice or while you still owe a card from a match, and anyone who owes a knocker a card keeps it (a knocker's hand is frozen).
 - **Power picks:** if a picked card is matched or moved before the power finishes, that pick no longer counts (pick again; a King can't swap it).
-- **Turn timer:** a human has 45 seconds per turn. When it runs out the turn is skipped, and a drawn card is discarded without its power. Bots that make an illegal move forfeit their turn the same way.
+- **Turn timer:** a human has the host's turn time (45 seconds by default) per turn. When it runs out the turn is skipped, and a drawn card is discarded without its power. Bots that make an illegal move forfeit their turn the same way.
 - Peeked cards flip back face-down. The client must never show a card the player isn't currently allowed to see. No memory aid.
 
 ## Conventions
@@ -70,5 +76,6 @@ An online multiplayer card game for 2–8 players (bots fill empty seats), playe
 ## Hosting (Render)
 
 - Hosted on Render's free plan as one Node web service, defined in `render.yaml` (build `npm ci --omit=dev`, start `npm start`, health check `/healthz`, Node version from `package.json` `engines`). The server reads `PORT` from the environment.
-- Tables are in memory only. A redeploy, restart, or free-tier sleep (after ~15 minutes with no visitors) clears every table. The first visit after a sleep takes about 30–60 s to load.
+- **Saved tables:** with `REDIS_URL` set (a free Render Key Value instance linked to the web service), `server/store.js` saves every table shortly after each change and on shutdown, and loads a table back the first time someone opens it after a restart (lazily, not at boot, because Render keeps the old server running during a deploy), so redeploys, restarts and free-tier sleep (after ~15 minutes with no visitors) no longer clear tables. Bots forget what they had peeked at. Without `REDIS_URL` (local development) tables are in memory only. The free Key Value plan keeps data in memory, so a restart of the Key Value instance itself would clear tables. The first visit after a sleep takes about 30–60 s to load.
+- Live site: https://kings-gambit-th9r.onrender.com (the only copy).
 - **Deploying an update:** run `npm test`, commit, and `git push` to `main` on GitHub. Render auto-deploys `main`; watch the deploy in the Render dashboard, then open the site and play a round. Avoid pushing while friends are mid-game.

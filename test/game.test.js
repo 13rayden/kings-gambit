@@ -14,7 +14,7 @@ test('start deals 4 cards each and shows only the bottom two', () => {
   game.start();
   assert.equal(game.phase, 'initialPeek');
   assert.equal(game.player('a').hand.length, 4);
-  assert.equal(game.deck.length, 54 - 8);
+  assert.equal(game.deck.length, 56 - 8);
   assert.ok(!game.canSee('a', 'a', 0));
   assert.ok(!game.canSee('a', 'a', 1));
   assert.ok(game.canSee('a', 'a', 2));
@@ -716,4 +716,120 @@ test('if everyone still in knocked and all went over 5, the lowest total wins in
   assert.equal(game.phase, 'reveal');
   assert.deepEqual(game.result.winners, ['b']);
   assert.equal(game.player('b').wins, 1);
+});
+
+// ---------- card modes ----------
+
+for (const handSize of [5, 6]) {
+  test(`${handSize}-card mode deals ${handSize} cards and shows only the bottom two`, () => {
+    const game = new Game({ rng: seeded(3) });
+    game.addPlayer({ id: 'a', name: 'A', seat: 0 });
+    game.addPlayer({ id: 'b', name: 'B', seat: 1 });
+    game.updateSettings({ handSize });
+    game.start();
+    assert.equal(game.player('a').hand.length, handSize);
+    assert.equal(game.deck.length, 56 - 2 * handSize);
+    const seen = [...Array(handSize).keys()].filter((slot) => game.canSee('a', 'a', slot));
+    assert.deepEqual(seen, [handSize - 2, handSize - 1], 'the bottom row is the last two slots');
+  });
+}
+
+// ---------- settings ----------
+
+test('settings are checked, and card mode / match type lock during a match', () => {
+  const game = setupGame({ hands: { a: four('A', 'A', 'A', 'A'), b: four('9', '9', '9', '9') } });
+  assert.throws(() => game.updateSettings({ turnSeconds: 45 }), /between rounds/);
+  knockRound(game, 'a'); // now between rounds of match 1 (first to 5)
+  assert.throws(() => game.updateSettings({ handSize: 6 }), /locked/);
+  assert.throws(() => game.updateSettings({ matchType: 'points' }), /locked/);
+  game.updateSettings({ turnSeconds: 90 });
+  assert.equal(game.settings.turnSeconds, 90, 'the timer can change between rounds');
+  assert.throws(() => game.updateSettings({ turnSeconds: 7 }), /timer/);
+  assert.throws(() => game.updateSettings({ cheat: true }), /Unknown/);
+
+  const fresh = new Game();
+  assert.throws(() => fresh.updateSettings({ handSize: 7 }), /4, 5 or 6/);
+  assert.throws(() => fresh.updateSettings({ target: 0 }), /1 to 20/);
+  assert.throws(() => fresh.updateSettings({ target: 2.5 }), /1 to 20/);
+  fresh.updateSettings({ handSize: 5, matchType: 'points', target: 3 });
+  assert.deepEqual(fresh.settings, { handSize: 5, matchType: 'points', target: 3, turnSeconds: 45 });
+});
+
+// ---------- matches ----------
+
+/** Deals fixed hands for the next round of an existing game and skips the opening peek. */
+function nextRound(game, hands) {
+  game.start();
+  for (const [id, cards] of Object.entries(hands)) game.player(id).hand = cards;
+  game.finishInitialPeek();
+}
+
+test('first to N wins: the match ends when someone reaches the target, then a new match resets', () => {
+  const game = setupGame({ hands: { a: four('A', 'A', 'A', 'A'), b: four('9', '9', '9', '9') } });
+  game.settings.target = 2; // set before the deal in real play; here the match is already under way
+  knockRound(game, 'a');
+  assert.equal(game.matchInfo.over, false);
+  nextRound(game, { a: four('A', 'A', 'A', 'A'), b: four('9', '9', '9', '9') });
+  knockRound(game, 'a');
+  assert.equal(game.matchInfo.over, true);
+  assert.deepEqual(game.matchInfo.ranking, [
+    { id: 'a', place: 1, wins: 2, points: 8 },
+    { id: 'b', place: 2, wins: 0, points: 72 },
+  ]);
+  game.updateSettings({ handSize: 5 }); // allowed again once the match is over
+  game.start();
+  assert.equal(game.matchInfo.number, 2);
+  assert.deepEqual(game.players.map((p) => [p.wins, p.points]), [[0, 0], [0, 0]]);
+  assert.equal(game.player('a').hand.length, 5);
+});
+
+test('lowest total after N rounds: everyone scores each round, a busted knocker scores their total', () => {
+  const game = setupGame({ hands: { a: four('9', '9', '9', '9'), b: four('A', 'A', 'A', '2'), c: four('2', '2', '2', '2') } });
+  game.settings.matchType = 'points';
+  game.settings.target = 2;
+  game.act('a', { type: 'knock' }); // 36: busts
+  game.act('b', { type: 'knock' }); // 5: safe
+  game.deck.push(card('6'));
+  game.act('c', { type: 'draw' });
+  game.act('c', { type: 'discard' });
+  game.finishKnockReveal();
+  assert.deepEqual(game.result.scores, { a: 36, b: 5, c: 8 });
+  assert.deepEqual(game.players.map((p) => p.points), [36, 5, 8]);
+  assert.equal(game.matchInfo.over, false);
+  nextRound(game, { a: four('A', 'A', 'A', 'A'), b: four('5', '5', '5', '5'), c: four('A', 'A', '2', '2') });
+  knockRound(game, 'a');
+  assert.equal(game.matchInfo.over, true, 'two rounds played');
+  assert.deepEqual(game.matchInfo.ranking.map((r) => [r.id, r.place, r.points]), [['c', 1, 14], ['b', 2, 25], ['a', 3, 40]]);
+});
+
+test('players level on the tiebreak share a place', () => {
+  const game = setupGame({ hands: { a: four('A', 'A', 'A', '2'), b: four('A', '2', 'A', 'A'), c: four('9', '9', '9', '9') } });
+  game.settings.target = 1;
+  knockRound(game, 'a');
+  assert.deepEqual(game.matchInfo.ranking.map((r) => [r.id, r.place]), [['a', 1], ['b', 1], ['c', 3]]);
+});
+
+test('someone who joins between rounds of a match starts with no wins and the worst points', () => {
+  const game = setupGame({ hands: { a: four('A', 'A', 'A', 'A'), b: four('9', '9', '9', '9') } });
+  knockRound(game, 'a');
+  game.addPlayer({ id: 'c', name: 'C', seat: 2 });
+  assert.equal(game.player('c').wins, 0);
+  assert.equal(game.player('c').points, 36);
+});
+
+// ---------- saving tables ----------
+
+test('a game saved with toJSON comes back identical with fromJSON', () => {
+  const game = setupGame({ hands: { a: four('9', '3', '4', '5'), b: four('6', 'A', 'A', 'A') }, deck: [card('Q'), card('7')], discard: [card('6', 'spiral')] });
+  game.act('b', { type: 'match', owner: 'b', slot: 0 });
+  game.act('a', { type: 'draw' });
+  game.act('a', { type: 'discard' }); // 7: look at own card
+  game.act('a', { type: 'pick', owner: 'a', slot: 1 });
+  const saved = JSON.parse(JSON.stringify(game));
+  const back = Game.fromJSON(saved, { rng: seeded(1) });
+  assert.deepEqual(JSON.parse(JSON.stringify(back)), saved);
+  assert.ok(back.canSee('a', 'a', 1), 'peeks survive');
+  assert.ok(back.visible instanceof Map && back.ready instanceof Set && back.pendingGive instanceof Map);
+  back.act('a', { type: 'done' });
+  assert.equal(back.turnId, 'b', 'and play carries on');
 });
