@@ -8,6 +8,10 @@
   <link rel="stylesheet" href="/css/effects.css">
 </head>
 <body class="room">
+  <div class="room-frame" aria-hidden="true">
+    <span class="dia tl"><svg viewBox="0 0 20 28"><path d="M10 1 L19 14 L10 27 L1 14 Z"/></svg></span><span class="dia tr"><svg viewBox="0 0 20 28"><path d="M10 1 L19 14 L10 27 L1 14 Z"/></svg></span>
+    <span class="dia bl"><svg viewBox="0 0 20 28"><path d="M10 1 L19 14 L10 27 L1 14 Z"/></svg></span><span class="dia br"><svg viewBox="0 0 20 28"><path d="M10 1 L19 14 L10 27 L1 14 Z"/></svg></span>
+  </div>
   <header class="topbar">
     <a class="brand" href="/">♛ KING'S GAMBIT</a>
     <span class="round-info" id="roundInfo"></span>
@@ -15,7 +19,8 @@
 
   <main class="stage">
     <div class="table" id="table">
-      <div class="rim"><div class="felt"></div></div>
+      <!-- The table: a wooden rim with brass studs, a dark band with gold stitching, and red felt. -->
+      <div class="rim" id="rim"><div class="band"><div class="felt"></div></div></div>
       <div class="center" id="center"></div>
       <div id="seats"></div>
       <div class="podium hidden" id="podium"></div>
@@ -38,6 +43,15 @@
       <button class="btn btn-green" type="submit">Take the seat</button>
       <button class="btn btn-ghost" type="button" id="sitCancel">Cancel</button>
     </form>
+  </div>
+
+  <div class="modal hidden" id="knockModal" role="dialog" aria-modal="true" aria-labelledby="knockTitle">
+    <div class="modal-card knock-card">
+      <h3 id="knockTitle">Confirm Knocking?</h3>
+      <p>Everyone else gets one last turn, then your cards are revealed. You can't take it back.</p>
+      <button class="btn btn-gold" type="button" data-knock-yes>Knock</button>
+      <button class="btn btn-ghost" type="button" data-knock-no>Keep playing</button>
+    </div>
   </div>
 
   <div class="modal hidden" id="settingsModal">

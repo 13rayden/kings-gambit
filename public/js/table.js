@@ -17,7 +17,7 @@ const els = {
   roundInfo: $('roundInfo'), toast: $('toast'),
   sitModal: $('sitModal'), sitForm: $('sitForm'), nameInput: $('nameInput'), sitCancel: $('sitCancel'),
   chatForm: $('chatForm'), chatInput: $('chatInput'),
-  table: $('table'), settingsModal: $('settingsModal'), settingsForm: $('settingsForm'), podium: $('podium'),
+  table: $('table'), settingsModal: $('settingsModal'), knockModal: $('knockModal'), settingsForm: $('settingsForm'), podium: $('podium'),
 };
 
 /* Seat positions around the table (percent of the table box), starting with
@@ -32,6 +32,7 @@ let feedSig = '';
 let pendingSeat = null;
 let timerTick = null;
 let turnEndsAt = null;
+let lastCallEndsAt = null;
 
 const socket = io();
 
@@ -50,6 +51,9 @@ socket.on('state', (v) => {
   view = v;
   if (!canMatch()) matchArmed = false;
   turnEndsAt = v.turnMsLeft != null ? Date.now() + v.turnMsLeft : null;
+  lastCallEndsAt = v.lastCallMsLeft != null && !v.lastCallWaiting ? Date.now() + v.lastCallMsLeft : null;
+  syncLastCallTick();
+  if (!myTurn() || v.phase !== 'turn') closeKnockConfirm();
   const fresh = newMotions(v);
   render();
   animate(prev, fresh, pileRects);
@@ -285,6 +289,13 @@ function bannerText() {
     const best = view.result.totals[view.result.winners[0]];
     return { text: `🏆 ${names} win${view.result.winners.length > 1 ? '' : 's'} with ${best}`, tone: 'gold' };
   }
+  if (p === 'lastCall') {
+    if (view.lastCallWaiting) {
+      const owing = view.seats.filter((s) => s && s.owesCard).map((s) => esc(s.name)).join(' & ');
+      return { text: owing ? `Waiting for ${owing} to give a card…` : 'Revealing…', tone: 'gold' };
+    }
+    return { text: `Last chance to match! Cards are revealed in <span data-lastcall>${lastCallSeconds()}</span>s`, tone: 'gold' };
+  }
   if (inPlay()) {
     const who = myTurn() ? 'Your turn' : `${esc(nameOf(view.turnId))}'s turn`;
     return { text: knockers().length ? `${who} · final turns (${knockerNames()} knocked)` : who };
@@ -337,7 +348,7 @@ function renderActions() {
       ? 'Your final turn — draw a card, or knock too if you think you have 5 or less (your cards get protected).'
       : 'Your turn — draw a card, or knock if you think you have 5 or less.');
     buttons.push('<button class="btn btn-green" data-act="draw">Draw</button>');
-    if (!knockers().includes(me.id)) buttons.push(`<button class="btn btn-gold" data-act="knock">${knockers().length ? 'Knock too' : 'Knock'}</button>`);
+    if (!knockers().includes(me.id)) buttons.push(`<button class="btn btn-gold" data-knock>${knockers().length ? 'Knock too' : 'Knock'}</button>`);
   } else if (myTurn() && p === 'drawn') {
     const c = view.drawn;
     const power = view.drawnPower;
@@ -357,13 +368,17 @@ function renderActions() {
       buttons.push('<button class="btn btn-gold" data-act="kingSwap">Swap them</button>');
       buttons.push('<button class="btn" data-act="kingKeep">Keep as is</button>');
     }
+  } else if (p === 'lastCall') {
+    hint.push(canMatch()
+      ? `Final turns are over. Match the top card now if you can — ${knockerNames()} reveal${knockers().length > 1 ? '' : 's'} next.`
+      : `Final turns are over. ${knockerNames()} reveal${knockers().length > 1 ? '' : 's'} in a moment…`);
   } else if (p === 'knockReveal') {
     hint.push(`${knockerNames()} ${knockers().length > 1 ? 'are' : 'is'} revealing…`);
   } else {
     hint.push(`Waiting for <b>${esc(nameOf(view.turnId))}</b>…`);
   }
 
-  if (me && canMatch() && inPlay()) {
+  if (me && canMatch() && (inPlay() || p === 'lastCall')) {
     buttons.push(`<button class="btn ${matchArmed ? 'btn-gold' : ''}" data-match>${matchArmed ? 'Cancel match' : `Match ${view.discard.top.rank}`}</button>`);
   }
   els.actions.innerHTML = `<div class="hint">${hint.join('')}</div>${buttons.length ? `<div class="buttons">${buttons.join('')}</div>` : ''}`;
@@ -609,6 +624,7 @@ function roundInfoText() {
 function recapHTML() {
   const st = view.settings;
   const scores = view.result.scores || {};
+  const matched = view.result.matches || {};
   const winners = view.result.winners;
   const rows = view.match.standings.map((r) => {
     const s = view.seats.find((x) => x && x.id === r.id);
@@ -616,14 +632,14 @@ function recapHTML() {
     const round = r.id in scores ? scores[r.id] : '—';
     return `<tr class="${winners.includes(r.id) ? 'won' : ''}${r.id === myId() ? ' me' : ''}">
       <td class="place">${r.place}</td><td class="who">${esc(s.name)}${winners.includes(r.id) ? ' 🏆' : ''}</td>
-      <td>${round}</td><td>${r.points}</td><td>${r.wins}</td></tr>`;
+      <td>${round}</td><td>${matched[r.id] || 0}</td><td>${r.points}</td><td>${r.wins}</td></tr>`;
   }).join('');
   const progress = st.matchType === 'points'
     ? `Round ${view.match.roundsPlayed} of ${st.target}`
     : `Round ${view.match.roundsPlayed} · first to ${plural(st.target, 'win')}`;
   return `<div class="recap">
     <div class="recap-head"><b>Round recap</b><span>${esc(progress)}</span></div>
-    <table><thead><tr><th>#</th><th class="who">Player</th><th>Round</th><th>Points</th><th>Wins</th></tr></thead>
+    <table><thead><tr><th>#</th><th class="who">Player</th><th>Round</th><th title="Cards matched correctly this round">Matched</th><th>Points</th><th>Wins</th></tr></thead>
     <tbody>${rows}</tbody></table>
   </div>`;
 }
@@ -712,6 +728,61 @@ els.settingsForm.addEventListener('submit', (e) => {
   });
 });
 
+// ---------- the table's brass studs ----------
+
+/* Twelve studs evenly around the wooden rim, on the middle of the wood. */
+(function placeStuds() {
+  const rim = document.getElementById('rim');
+  if (!rim) return;
+  const n = 12;
+  rim.insertAdjacentHTML('beforeend', Array.from({ length: n }, (_, i) => {
+    const a = (i / n) * Math.PI * 2;
+    const cos = Math.cos(a).toFixed(4);
+    const sin = Math.sin(a).toFixed(4);
+    return `<span class="stud" style="left:calc(50% + (50% - var(--wood) / 2) * ${cos});top:calc(50% + (50% - var(--wood) / 2) * ${sin})"></span>`;
+  }).join(''));
+}());
+
+// ---------- knock confirmation and the last-chance countdown ----------
+
+/* Knocking can't be undone, so it asks first. */
+function openKnockConfirm() {
+  if (!myTurn() || view.phase !== 'turn') return;
+  els.knockModal.classList.remove('hidden');
+  els.knockModal.querySelector('[data-knock-yes]').focus();
+}
+
+function closeKnockConfirm() {
+  els.knockModal.classList.add('hidden');
+}
+
+els.knockModal.addEventListener('click', (e) => {
+  if (e.target.closest('[data-knock-yes]')) {
+    closeKnockConfirm();
+    act({ type: 'knock' });
+  } else if (e.target.closest('[data-knock-no]') || e.target === els.knockModal) {
+    closeKnockConfirm();
+  }
+});
+
+function lastCallSeconds() {
+  return lastCallEndsAt ? Math.max(0, Math.ceil((lastCallEndsAt - Date.now()) / 1000)) : 0;
+}
+
+/* Ticks the countdown only while the last chance to match is running. */
+let lastCallTick = null;
+function syncLastCallTick() {
+  if (lastCallEndsAt && !lastCallTick) {
+    lastCallTick = setInterval(() => {
+      const el = document.querySelector('[data-lastcall]');
+      if (el) el.textContent = lastCallSeconds();
+    }, 250);
+  } else if (!lastCallEndsAt && lastCallTick) {
+    clearInterval(lastCallTick);
+    lastCallTick = null;
+  }
+}
+
 // ---------- "your turn" alert when the tab is in the background ----------
 
 const baseTitle = document.title;
@@ -747,12 +818,13 @@ window.addEventListener('fx:changed', () => render());
 // ---------- events ----------
 
 document.addEventListener('click', (e) => {
-  const t = e.target.closest('[data-owner],[data-discard],[data-act],[data-sit],[data-bot],[data-remove],[data-start],[data-fill],[data-leave],[data-copy],[data-match],[data-settings],[data-podium],[data-podium-hide]');
+  const t = e.target.closest('[data-owner],[data-discard],[data-act],[data-sit],[data-bot],[data-remove],[data-start],[data-fill],[data-leave],[data-copy],[data-match],[data-settings],[data-podium],[data-podium-hide],[data-knock]');
   if (!t) return;
   const d = t.dataset;
   if (d.owner != null) onCardTap(d.owner, Number(d.slot));
   else if (d.discard != null) toggleMatch();
   else if (d.match != null) toggleMatch();
+  else if (d.knock != null) openKnockConfirm();
   else if (d.act) act({ type: d.act });
   else if (d.sit != null) openSit(Number(d.sit));
   else if (d.bot != null) send('addBot', { seat: Number(d.bot) });
@@ -771,7 +843,9 @@ document.addEventListener('click', (e) => {
 
 document.addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT') return;
-  if (e.key === 'Escape' && matchArmed) {
+  if (e.key === 'Escape' && !els.knockModal.classList.contains('hidden')) {
+    closeKnockConfirm();
+  } else if (e.key === 'Escape' && matchArmed) {
     matchArmed = false;
     render();
   } else if (e.key === 'm' || e.key === 'M') {

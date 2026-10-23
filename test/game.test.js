@@ -295,9 +295,11 @@ test('knock: everyone else gets one turn, then the lowest total wins', () => {
   assert.throws(() => game.act('b', { type: 'knock' }), GameError);
   game.act('c', { type: 'draw' });
   game.act('c', { type: 'discard' });
+  game.finishLastCall();
   assert.equal(game.phase, 'knockReveal');
   assert.ok(game.canSee('c', 'a', 0), "everyone sees the knocker's cards first");
   assert.ok(!game.canSee('c', 'b', 0), 'but not anyone else yet');
+  game.finishLastCall();
   game.finishKnockReveal();
   assert.equal(game.phase, 'reveal');
   assert.deepEqual(game.result.totals, { a: 5, b: 1, c: 36 });
@@ -314,6 +316,7 @@ test('knocker over 5 is out and play resumes until the next knock', () => {
     game.act(id, { type: 'draw' });
     game.act(id, { type: 'discard' });
   }
+  game.finishLastCall();
   game.finishKnockReveal();
   assert.equal(game.player('a').status, 'out');
   assert.deepEqual(game.player('a').hand, []);
@@ -324,7 +327,9 @@ test('knocker over 5 is out and play resumes until the next knock', () => {
   game.act('b', { type: 'knock' }); // b = 4
   game.act('c', { type: 'draw' });
   game.act('c', { type: 'discard' });
+  game.finishLastCall();
   assert.equal(game.phase, 'knockReveal');
+  game.finishLastCall();
   game.finishKnockReveal();
   assert.equal(game.phase, 'reveal');
   assert.deepEqual(game.result.winners, ['b']);
@@ -336,6 +341,7 @@ test('a bust that leaves one player makes them the winner', () => {
   game.act('a', { type: 'knock' });
   game.act('b', { type: 'draw' });
   game.act('b', { type: 'discard' });
+  game.finishLastCall();
   game.finishKnockReveal();
   assert.equal(game.phase, 'reveal');
   assert.deepEqual(game.result.winners, ['b']);
@@ -346,6 +352,7 @@ test('ties share the win', () => {
   game.act('a', { type: 'knock' });
   game.act('b', { type: 'draw' });
   game.act('b', { type: 'discard' });
+  game.finishLastCall();
   game.finishKnockReveal();
   assert.deepEqual(game.result.winners.sort(), ['a', 'b']);
 });
@@ -357,10 +364,12 @@ test('new round resets everyone, including players who were out', () => {
     game.act(id, { type: 'draw' });
     game.act(id, { type: 'discard' });
   }
+  game.finishLastCall();
   game.finishKnockReveal(); // a is out
   game.act('b', { type: 'knock' });
   game.act('c', { type: 'draw' });
   game.act('c', { type: 'swap', slot: 0 }); // the reshuffled deck may hand c a power card
+  game.finishLastCall();
   game.finishKnockReveal();
   assert.equal(game.phase, 'reveal');
   game.start();
@@ -583,10 +592,12 @@ test('another player can knock during the final turns and is protected too', () 
   assert.equal(game.turnId, 'c');
   game.act('c', { type: 'draw' });
   game.act('c', { type: 'discard' });
+  game.finishLastCall();
   assert.equal(game.phase, 'knockReveal', 'final turns end back at the first knocker');
   assert.ok(game.canSee('c', 'a', 0) && game.canSee('c', 'b', 0), "every knocker's cards are shown");
   assert.ok(!game.canSee('a', 'c', 0));
   assert.deepEqual(game.knockTotals, { a: 5, b: 5 });
+  game.finishLastCall();
   game.finishKnockReveal();
   assert.equal(game.phase, 'reveal');
   assert.deepEqual(game.result.winners.sort(), ['a', 'b'], 'the tie shares the win');
@@ -610,6 +621,7 @@ test('when one knocker busts and another is safe, the bust is out and everyone e
   game.act('b', { type: 'knock' }); // 36
   game.act('c', { type: 'draw' });
   game.act('c', { type: 'discard' });
+  game.finishLastCall();
   game.finishKnockReveal();
   assert.equal(game.player('b').status, 'out');
   assert.deepEqual(game.player('b').hand, []);
@@ -629,6 +641,7 @@ test('when every knocker busts, play continues and the next knocker is protected
     game.act(id, { type: 'draw' });
     game.act(id, { type: 'discard' });
   }
+  game.finishLastCall();
   game.finishKnockReveal();
   assert.equal(game.player('a').status, 'out');
   assert.equal(game.player('b').status, 'out');
@@ -639,7 +652,9 @@ test('when every knocker busts, play continues and the next knocker is protected
   assert.ok(game.isProtected('c'));
   game.act('d', { type: 'draw' });
   game.act('d', { type: 'discard' });
+  game.finishLastCall();
   assert.equal(game.phase, 'knockReveal');
+  game.finishLastCall();
   game.finishKnockReveal();
   assert.deepEqual(game.result.winners, ['c']);
 });
@@ -650,11 +665,12 @@ test('when every knocker busts, play continues and the next knocker is protected
 function knockRound(game, knocker) {
   game.turnId = knocker;
   game.act(knocker, { type: 'knock' });
-  while (game.phase !== 'knockReveal') {
+  while (game.phase !== 'knockReveal' && game.phase !== 'lastCall') {
     game.deck.push(card('6'));
     game.act(game.turnId, { type: 'draw' });
     game.act(game.turnId, { type: 'discard' });
   }
+  game.finishLastCall();
   game.finishKnockReveal();
 }
 
@@ -711,7 +727,9 @@ test('if everyone still in knocked and all went over 5, the lowest total wins in
   const game = setupGame({ hands: { a: four('9', '9', '9', '9'), b: four('8', '8', '8', '8') } });
   game.act('a', { type: 'knock' });
   game.act('b', { type: 'knock' });
+  game.finishLastCall();
   assert.equal(game.phase, 'knockReveal');
+  game.finishLastCall();
   game.finishKnockReveal();
   assert.equal(game.phase, 'reveal');
   assert.deepEqual(game.result.winners, ['b']);
@@ -792,6 +810,7 @@ test('lowest total after N rounds: everyone scores each round, a busted knocker 
   game.deck.push(card('6'));
   game.act('c', { type: 'draw' });
   game.act('c', { type: 'discard' });
+  game.finishLastCall();
   game.finishKnockReveal();
   assert.deepEqual(game.result.scores, { a: 36, b: 5, c: 8 });
   assert.deepEqual(game.players.map((p) => p.points), [36, 5, 8]);
@@ -832,4 +851,91 @@ test('a game saved with toJSON comes back identical with fromJSON', () => {
   assert.ok(back.visible instanceof Map && back.ready instanceof Set && back.pendingGive instanceof Map);
   back.act('a', { type: 'done' });
   assert.equal(back.turnId, 'b', 'and play carries on');
+});
+
+// ---------- last chance to match, and the match stat ----------
+
+test('after the final turns everyone gets a last chance to match before the reveal', () => {
+  const game = setupGame({
+    hands: { a: four('A', 'A', 'A', '2'), b: [card('8'), ...four('9', '9', '9')], c: [card('8', 'chip'), ...four('A', '2', '3')] },
+    deck: [card('6'), card('8', 'spiral')],
+  });
+  game.act('a', { type: 'knock' });
+  game.act('b', { type: 'draw' }); // the 8 of Spirals
+  game.act('b', { type: 'discard' });
+  game.act('b', { type: 'skip' }); // 8's power
+  game.act('c', { type: 'draw' }); // 6
+  game.act('c', { type: 'discard' });
+  assert.equal(game.phase, 'lastCall');
+  assert.ok(!game.canSee('b', 'a', 0), "the knocker's cards aren't shown yet");
+  assert.throws(() => game.act('a', { type: 'match', owner: 'a', slot: 0 }), /frozen/, 'knockers still cannot match');
+  // The 6 is on top, so nobody has a match; a wrong guess costs a penalty and keeps the window open.
+  game.act('b', { type: 'match', owner: 'b', slot: 1 });
+  assert.equal(game.player('b').hand.filter(Boolean).length, 5);
+  assert.equal(game.finishLastCall(), true);
+  assert.equal(game.phase, 'knockReveal');
+  assert.ok(game.canSee('b', 'a', 0));
+});
+
+test("a match in the last chance counts, and the reveal waits for the matcher's give", () => {
+  const game = setupGame({
+    hands: { a: four('A', 'A', 'A', '2'), b: four('9', '9', '9', '9'), c: [card('7'), ...four('A', '2', '3')] },
+    deck: [card('7', 'spiral')],
+  });
+  game.act('a', { type: 'knock' });
+  game.act('b', { type: 'knock' }); // b knocks too, so c takes the last turn
+  game.act('c', { type: 'draw' });
+  game.act('c', { type: 'swap', slot: 1 }); // the A goes on the pile (no power)
+  game.discard.push(card('7', 'chip')); // put a 7 on top for the test
+  game.topPaired = false;
+  assert.equal(game.phase, 'lastCall');
+  // Nobody but c is free to match (a and b knocked); c matches their own 7.
+  game.act('c', { type: 'match', owner: 'c', slot: 0 });
+  assert.equal(game.roundMatches.c, 1);
+  game.finishLastCall();
+  game.finishKnockReveal();
+  assert.deepEqual(game.result.matches, { c: 1 });
+});
+
+test("the reveal waits while someone owes a card from a last-chance match, but not forever", () => {
+  const game = setupGame({
+    hands: { a: four('A', 'A', 'A', '2'), b: [card('9'), ...four('2', '2', '2')], c: [card('3'), ...four('3', '3', '3')] },
+    deck: [card('6')],
+  });
+  game.act('a', { type: 'knock' });
+  game.act('b', { type: 'draw' });
+  game.act('b', { type: 'discard' }); // 6 on top
+  game.act('c', { type: 'knock' }); // c knocks too; final turns end
+  assert.equal(game.phase, 'lastCall');
+  game.discard.push(card('9', 'spiral'));
+  game.topPaired = false;
+  game.act('b', { type: 'match', owner: 'b', slot: 0 }); // b matches their own 9: no give
+  assert.equal(game.finishLastCall(), true, 'nothing owed');
+
+  const g2 = setupGame({
+    hands: { a: four('A', 'A', 'A', '2'), b: four('5', '5', '5', '5'), c: [card('9'), ...four('3', '3', '3')], d: four('4', '4', '4', '4') },
+    deck: [card('6'), card('6')],
+  });
+  g2.act('a', { type: 'knock' });
+  for (const id of ['b', 'c', 'd']) { g2.act(id, { type: 'draw' }); g2.act(id, { type: 'discard' }); }
+  assert.equal(g2.phase, 'lastCall');
+  g2.discard.push(card('9', 'spiral'));
+  g2.topPaired = false;
+  g2.act('b', { type: 'match', owner: 'c', slot: 0 }); // b takes c's 9 and owes c a card
+  assert.equal(g2.finishLastCall(), false, 'waits for the give');
+  assert.equal(g2.phase, 'lastCall');
+  assert.equal(g2.finishLastCall({ force: true }), true, 'the wait can run out');
+  assert.equal(g2.phase, 'knockReveal');
+  assert.equal(g2.pendingGive.size, 0);
+});
+
+test('the last chance is skipped when nothing can be matched', () => {
+  const g2 = setupGame({ hands: { a: four('A', 'A', 'A', 'A'), b: four('9', '9', '9', '9') }, deck: [card('9', 'spiral')] });
+  g2.act('a', { type: 'knock' });
+  g2.act('b', { type: 'draw' });
+  g2.act('b', { type: 'discard' }); // 9 on top (no power for b: 9 picks someone else's card)
+  g2.act('b', { type: 'pick', owner: 'a', slot: 0 });
+  g2.act('b', { type: 'match', owner: 'b', slot: 0 }); // b matches before ending the turn: a pair is on top
+  g2.act('b', { type: 'done' });
+  assert.equal(g2.phase, 'knockReveal', 'no single card on top, so straight to the reveal');
 });

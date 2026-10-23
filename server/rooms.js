@@ -10,6 +10,8 @@ const INITIAL_PEEK_MS = 6000;
 const VIEW_MS = 6000;
 const DECIDE_MS = 12000;
 const KNOCK_REVEAL_MS = 3500;
+const LAST_CALL_MS = 5000; // the last chance to match before the knockers reveal
+const LAST_CALL_MAX_WAITS = 3; // extra 5 s waits for owed cards before the reveal goes ahead anyway
 const BOT_TURN_MS = [1200, 2200];
 const BOT_REACT_MS = [2500, 4500]; // slow enough that people can win a match race
 const ROOM_IDLE_MS = 6 * 60 * 60 * 1000;
@@ -30,6 +32,7 @@ class Room {
     this.chat = [];
     this.timers = new Map();
     this.turnDeadline = null;
+    this.lastCall = null; // { key, deadline, waits } while the last chance to match runs
     this.lastActive = Date.now();
   }
 
@@ -237,6 +240,21 @@ class Room {
       this.ensureTimer(`view:${round}:${turnNo}:${step}`, step === 'viewing' ? VIEW_MS : DECIDE_MS, () => {
         if (sameTurn() && game.phase === 'power' && game.power.step === step) game.powerDone(game.turnId);
       });
+    }
+
+    if (phase === 'lastCall') {
+      const key = `${round}:${turnNo}`;
+      if (!this.lastCall || this.lastCall.key !== key) this.lastCall = { key, deadline: null, waits: 0 };
+      const timerKey = `lastcall:${key}:${this.lastCall.waits}`;
+      if (!this.timers.has(timerKey)) this.lastCall.deadline = Date.now() + LAST_CALL_MS;
+      this.ensureTimer(timerKey, LAST_CALL_MS, () => {
+        if (game.phase !== 'lastCall' || !sameTurn()) return;
+        // Someone still owes a card from a match: wait a little longer, but not forever.
+        const force = this.lastCall.waits >= LAST_CALL_MAX_WAITS;
+        if (!game.finishLastCall({ force })) this.lastCall.waits++;
+      });
+    } else {
+      this.lastCall = null;
     }
 
     if (phase === 'knockReveal') {

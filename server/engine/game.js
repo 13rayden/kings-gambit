@@ -24,7 +24,7 @@ function goalText({ matchType, target }) {
 /** The two bottom slots of a freshly dealt hand: the cards each player sees at the start. */
 const initialPeekSlots = (handSize) => [handSize - 2, handSize - 1];
 /** Phases in which anyone may match the top discard. */
-const MATCH_PHASES = new Set(['turn', 'drawn', 'power']);
+const MATCH_PHASES = new Set(['turn', 'drawn', 'power', 'lastCall']);
 
 /**
  * The one place power descriptions live. `log` goes in the game log, `short` is the
@@ -83,7 +83,8 @@ class Game {
   constructor({ rng = Math.random } = {}) {
     this.rng = rng;
     this.players = []; // { id, name, isBot, seat, hand, status: 'active' | 'out' }
-    this.phase = 'lobby'; // lobby | initialPeek | turn | drawn | power | knockReveal | reveal
+    // lobby | initialPeek | turn | drawn | power | lastCall (a last chance to match) | knockReveal | reveal
+    this.phase = 'lobby';
     this.round = 0;
     this.deck = [];
     this.discard = [];
@@ -107,6 +108,7 @@ class Game {
     // The match in progress: wins and points live on each player; this tracks the rest.
     this.matchInfo = { number: 0, roundsPlayed: 0, over: false, ranking: null };
     this.roundScores = {}; // id -> total for this round, including knockers who went out
+    this.roundMatches = {}; // id -> correct matches this round
     this.dealtSize = this.settings.handSize; // cards per hand this round (settings may change between matches)
     this.version = 0;
   }
@@ -327,6 +329,7 @@ class Game {
     this.knockers = [];
     this.knockTotals = null;
     this.roundScores = {};
+    this.roundMatches = {};
     this.dealtSize = this.settings.handSize;
     this.drawn = null;
     this.power = null;
@@ -554,6 +557,7 @@ class Game {
       this.forgetSlot(owner, slot);
       this.discard.push(card);
       this.topPaired = true;
+      this.roundMatches[id] = (this.roundMatches[id] || 0) + 1;
       this.motion('match', { by: id, from: { owner, slot } });
       if (owner === id) {
         this.addLog(`${this.name(id)} matched their own ${cardLabel(card)}!`);
@@ -612,6 +616,31 @@ class Game {
     this.version++;
   }
 
+  /**
+   * Ends the last chance to match (called by the server's countdown). Waits while someone
+   * still owes a card from a match, unless `force` (the wait ran out): then they keep it.
+   * Returns false if it is still waiting.
+   */
+  finishLastCall({ force = false } = {}) {
+    if (this.phase !== 'lastCall') return true;
+    if (this.pendingGive.size && !force) return false;
+    for (const [matcher, pending] of this.pendingGive) {
+      this.addLog(`${this.name(matcher)} still owed ${this.name(pending.to)} a card, so ${this.name(pending.to)} keeps the empty slot.`);
+    }
+    this.pendingGive.clear();
+    this.startKnockReveal();
+    this.version++;
+    return true;
+  }
+
+  startKnockReveal() {
+    this.knockTotals = Object.fromEntries(this.knockers.map((kid) => [kid, this.handTotal(kid)]));
+    this.turnId = this.firstKnocker();
+    this.phase = 'knockReveal';
+    const names = this.knockers.map((kid) => this.name(kid)).join(' and ');
+    this.addLog(`${names} reveal${this.knockers.length > 1 ? '' : 's'} their cards…`);
+  }
+
   /** Called by the server a moment after the knocker's cards are shown. */
   finishKnockReveal() {
     if (this.phase !== 'knockReveal') return;
@@ -667,11 +696,14 @@ class Game {
     const next = this.nextActiveAfterSeat(this.player(this.turnId).seat);
     const first = this.firstKnocker();
     if (first && next.id === first) {
-      this.knockTotals = Object.fromEntries(this.knockers.map((kid) => [kid, this.handTotal(kid)]));
-      this.turnId = first;
-      this.phase = 'knockReveal';
-      const names = this.knockers.map((kid) => this.name(kid)).join(' and ');
-      this.addLog(`Final turns are over. ${names} reveal${this.knockers.length > 1 ? '' : 's'} their cards…`);
+      this.turnId = first; // the reveal (now or after the last chance) belongs to the first knocker
+      // Before the reveal, everyone gets a last chance to match the top card (if it can be matched).
+      if (this.topDiscard() && !this.topPaired) {
+        this.phase = 'lastCall';
+        this.addLog('Final turns are over. Last chance to match before the reveal!');
+      } else {
+        this.startKnockReveal();
+      }
       return;
     }
     this.turnId = next.id;
@@ -702,7 +734,7 @@ class Game {
     const over = matchType === 'wins'
       ? this.players.some((p) => p.wins >= target)
       : this.matchInfo.roundsPlayed >= target;
-    this.result = { winners, totals, scores };
+    this.result = { winners, totals, scores, matches: { ...this.roundMatches } };
     const names = winners.map((id) => this.name(id)).join(' and ');
     this.addLog(`${names} win${winners.length > 1 ? '' : 's'} with ${best}!`);
     if (over) {

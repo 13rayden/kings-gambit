@@ -86,18 +86,82 @@ body.room { overflow: hidden; }
   aspect-ratio: 1.9;
 }
 .rim {
+  /* Wood: a warm brown with fine grain lines that follow the oval, and a lit top edge. */
+  --wood: clamp(12px, 2.4vw, 26px);
   position: absolute; inset: 9% 9% 12% 9%;
   border-radius: 50% / 50%;
-  background: linear-gradient(#3a3d44, #1f2125);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6), inset 0 2px 0 rgba(255, 255, 255, 0.06);
-  padding: 14px;
+  padding: var(--wood);
+  background:
+    repeating-radial-gradient(ellipse farthest-side at 50% 50%, transparent 0 5px, rgba(30, 14, 4, 0.22) 5px 6px, transparent 6px 11px),
+    linear-gradient(170deg, #8a5a32 0%, #6e4526 45%, #4c2f18 100%);
+  box-shadow:
+    0 26px 60px rgba(0, 0, 0, 0.7),
+    0 8px 0 #3a2312,
+    inset 0 2px 0 rgba(255, 220, 170, 0.25),
+    inset 0 -3px 6px rgba(0, 0, 0, 0.45);
+}
+.rim .stud {
+  position: absolute;
+  width: clamp(5px, 0.7vw, 10px); aspect-ratio: 1;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle at 35% 30%, #fff3b0, #d4a72c 45%, #7a5a10 100%);
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.6);
+}
+.band {
+  /* The dark leather band between the wood and the felt, with gold stitching. */
+  position: relative;
+  width: 100%; height: 100%;
+  border-radius: inherit;
+  padding: calc(var(--wood) * 0.75);
+  background: linear-gradient(#231915, #120c0a);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(0, 0, 0, 0.6);
+}
+.band::before {
+  content: "";
+  position: absolute; inset: calc(var(--wood) * 0.36);
+  border-radius: inherit;
+  border: 1.5px dashed rgba(220, 180, 60, 0.75);
+  pointer-events: none;
 }
 .felt {
+  position: relative;
   width: 100%; height: 100%;
-  border-radius: 50% / 50%;
-  background: radial-gradient(ellipse at 50% 40%, var(--felt-1), var(--felt-2) 75%);
-  box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.45);
+  border-radius: inherit;
+  background: radial-gradient(ellipse at 50% 42%, #b0161f 0%, #98121b 55%, #760d14 100%);
+  box-shadow: inset 0 0 50px rgba(0, 0, 0, 0.45), inset 0 0 0 2px rgba(0, 0, 0, 0.35);
 }
+/* The gold inner oval and its fine dashed line, as on the picture. */
+.felt::before, .felt::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+}
+.felt::before { inset: 17% 15%; border: 1.5px solid rgba(214, 170, 50, 0.8); }
+.felt::after { inset: calc(17% + 6px) calc(15% + 6px); border: 1px dashed rgba(214, 170, 50, 0.45); }
+
+/* ---------- the room: black with a red frame and diamond corners ---------- */
+body.room { background: #0a0b0d; }
+.room-frame {
+  position: fixed; inset: 8px;
+  border: 2px solid #d3303c;
+  border-radius: 22px;
+  pointer-events: none;
+  z-index: 0;
+}
+.room-frame::before {
+  content: "";
+  position: absolute; inset: 8px;
+  border: 1px solid rgba(211, 48, 60, 0.35);
+  border-radius: 16px;
+}
+.room-frame .dia { position: absolute; width: 16px; height: 22px; }
+.room-frame .dia svg { width: 100%; height: 100%; fill: none; stroke: #d3303c; stroke-width: 1.6; }
+.room-frame .tl { left: 22px; top: 22px; }
+.room-frame .tr { right: 22px; top: 22px; }
+.room-frame .bl { left: 22px; bottom: 22px; }
+.room-frame .br { right: 22px; bottom: 22px; }
 
 /* ---------- center of the table ---------- */
 .center {
@@ -327,8 +391,14 @@ body.room { overflow: hidden; }
   body.room { overflow: auto; }
   .stage { position: static; padding: 52px 0 0; display: block; }
   .table { width: calc(100vw - 16px); margin: 0 auto 70px; aspect-ratio: 0.82; }
-  .rim { inset: 12% 10% 16% 10%; padding: 8px; border-radius: 45% / 40%; }
-  .felt { border-radius: 45% / 40%; }
+  .rim { inset: 12% 10% 16% 10%; border-radius: 45% / 40%; --wood: 10px; }
+  .room-frame { inset: 4px; border-width: 1.5px; border-radius: 14px; }
+  .room-frame::before { inset: 5px; border-radius: 10px; }
+  .room-frame .dia { width: 10px; height: 14px; }
+  .room-frame .tl, .room-frame .tr { display: none; } /* they'd sit behind the title bar */
+  .room-frame .bl, .room-frame .br { bottom: 12px; }
+  .room-frame .tl, .room-frame .bl { left: 12px; }
+  .room-frame .tr, .room-frame .br { right: 12px; }
   .center { width: 56%; gap: 6px; }
   .piles { gap: 10px; }
   .pile { font-size: 9px; }
@@ -410,3 +480,6 @@ body.room { overflow: hidden; }
   .recap th { font-size: 8px; }
   .recap .who { max-width: 64px; }
 }
+
+.knock-card h3 { margin: 0; font-size: 18px; }
+.knock-card p { margin: 0 0 4px; color: #555; font-size: 13px; line-height: 1.4; }

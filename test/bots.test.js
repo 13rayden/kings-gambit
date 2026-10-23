@@ -21,7 +21,12 @@ function playBotRound(seed, playerCount, handSize = 4) {
   while (game.phase !== 'reveal') {
     if (++steps > 20000) throw new Error(`seed ${seed}: round never ended`);
     for (const b of brains) b.observe(game);
+    if (game.phase === 'lastCall' && !brains.some((b) => b.reactiveAction(game))) {
+      game.finishLastCall({ force: true });
+      continue;
+    }
     if (game.phase === 'knockReveal') {
+      game.finishLastCall();
       game.finishKnockReveal();
       continue;
     }

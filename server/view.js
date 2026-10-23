@@ -63,6 +63,11 @@ function buildView(room, viewerId, feed = room.feed()) {
     turnId: game.turnId,
     turnMsLeft: room.turnDeadline ? Math.max(0, room.turnDeadline - Date.now()) : null,
     turnMs: room.turnMs,
+    // The last chance to match before the reveal: how long is left.
+    lastCallMsLeft: game.phase === 'lastCall' && room.lastCall && room.lastCall.deadline
+      ? Math.max(0, room.lastCall.deadline - Date.now()) : null,
+    // Once the 5 seconds are up, the reveal waits for anyone who still owes a card from a match.
+    lastCallWaiting: game.phase === 'lastCall' && !!room.lastCall && room.lastCall.waits > 0,
     knockers: game.knockers.slice(),
     seats,
     deckCount: game.deck.length,

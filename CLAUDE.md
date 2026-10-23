@@ -41,7 +41,8 @@ An online multiplayer card game for 2–8 players (bots fill empty seats), playe
   - A wrong match: the card stays, and the matcher draws one face-down penalty card.
   - A knocker's hand is frozen: it can't be matched, and a knocker can't match.
 - **Knocking:** on your turn, instead of drawing, you can knock. Every other active player gets one last turn. During those final turns, anyone who hasn't knocked may also knock instead of drawing. Every knocker's cards are protected: they can't be swapped, matched, or reshuffled by a Joker. Final turns end when play gets back to the first knocker.
-- **Knocker reveal:** after the final turns, every knocker's cards are revealed together.
+- **Last chance to match:** when the final turns end (play gets back to the first knocker), and the top of the discard pile is a single card, everyone gets 5 seconds to match before anything is revealed. Normal matching rules apply (knockers are still frozen; no triple stacking; wrong guesses draw a penalty). The countdown waits for anyone who owes a card from a match, up to 15 more seconds; after that they keep their card. If nothing can be matched, the reveal starts straight away.
+- **Knocker reveal:** after the last chance to match, every knocker's cards are revealed together.
   - Each knocker over 5 is out for the round, and their cards leave the table.
   - If at least one knocker has 5 or lower: everyone still in reveals; the lowest total wins (even if it isn't a knocker). Ties share the win.
   - If everyone still in the round knocked and all were over 5, nobody is knocked out: the lowest total wins (ties share).
@@ -54,7 +55,8 @@ An online multiplayer card game for 2–8 players (bots fill empty seats), playe
   - A new match resets everyone's wins and points.
 - **Host settings:** card mode, match type and target can change in the lobby or after a match ends (they're locked during a match); the turn timer (15/30/45/60/90 s) can change between any two rounds.
 - **Who starts:** the previous round's winner takes the first turn of the next round. With tied winners, the first of them clockwise after the previous round's starter goes first. Round 1 starts at the lowest seat.
-- After each round a recap shows everyone's round total, match points and wins; the host starts the next round.
+- After each round a recap shows everyone's round total, how many cards they matched correctly that round, match points and wins; the host starts the next round.
+- Knocking asks "Confirm Knocking?" first (client popup); "Keep playing" carries on with the turn.
 - **Knock edge cases:** you can't knock twice or while you still owe a card from a match, and anyone who owes a knocker a card keeps it (a knocker's hand is frozen).
 - **Power picks:** if a picked card is matched or moved before the power finishes, that pick no longer counts (pick again; a King can't swap it).
 - **Turn timer:** a human has the host's turn time (45 seconds by default) per turn. When it runs out the turn is skipped, and a drawn card is discarded without its power. Bots that make an illegal move forfeit their turn the same way.

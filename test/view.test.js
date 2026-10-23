@@ -41,6 +41,7 @@ test('everything is face up at the reveal', () => {
   game.act('a', { type: 'knock' });
   game.act('b', { type: 'draw' });
   game.act('b', { type: 'discard' });
+  game.finishLastCall();
   game.finishKnockReveal();
   const view = buildView(fakeRoom(game), 'a');
   assert.equal(view.seats[1].hand[3].rank, 'Q');
@@ -132,6 +133,11 @@ test('the view shows every knocker, their reveal totals and each seat\'s wins, b
   assert.deepEqual(during.seats.slice(0, 3).map((s) => s.wins), [0, 0, 3]);
   game.act('c', { type: 'draw' });
   game.act('c', { type: 'discard' });
+  const lastCall = buildView(fakeRoom(game), 'c');
+  assert.equal(lastCall.phase, 'lastCall');
+  assert.ok(lastCall.seats[0].hand.every((x) => x.hidden), "the knockers' cards stay hidden during the last chance to match");
+  assert.ok(lastCall.matchTargets.length > 0, 'c may still match');
+  game.finishLastCall();
   const reveal = buildView(fakeRoom(game), 'c');
   assert.deepEqual(reveal.seats.slice(0, 3).map((s) => s.knockTotal), [5, 5, null]);
   assert.equal(reveal.seats[0].hand[0].rank, 'A', "knockers' cards are face up");
@@ -160,6 +166,7 @@ test('5- and 6-card hands stay hidden, and the view carries settings, points and
   game.deck.push(card('6'));
   game.act('b', { type: 'draw' });
   game.act('b', { type: 'discard' });
+  game.finishLastCall();
   game.finishKnockReveal();
   const view = buildView(fakeRoom(game), 'b');
   assert.equal(view.match.over, true);
